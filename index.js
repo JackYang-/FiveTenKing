@@ -14,7 +14,7 @@ app.get('/', function(req, res){
 //apply settings
 var settings = require("./settings.json");
 var _listenPort = settings.port ? settings.port : '3000';
-var _listenIP = settings.ip ? settings.ip : '10.4.3.177';
+var _listenIP = settings.ip ? settings.ip : '192.168.0.100';
 
 //loading players
 var currentUserData = require("./registeredPlayers.json");
@@ -111,13 +111,13 @@ function setPlayerAttributes (ip, attribute, value)
 {
 	for (var i in players)
 	{
-		if (players[i].ip == ip)
+		if (players[i].ip === ip)
 		{
-			if (attribute == "name")
+			if (attribute === "name")
 			{
 				players[i].name = value;
 			}
-			else if (attribute == "connected")
+			else if (attribute === "connected")
 			{
 				players[i].connected = value;
 			}
@@ -131,7 +131,7 @@ function getPlayer (ip)
 {
 	for (var i in players)
 	{
-		if (players[i].ip == ip)
+		if (players[i].ip === ip)
 		{
 			return players[i];
 		}

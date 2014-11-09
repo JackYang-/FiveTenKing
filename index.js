@@ -10,6 +10,13 @@ app.get('/', function(req, res){
 //***************************************************************************************************************************
 // Application code
 //***************************************************************************************************************************
+
+//apply settings
+var settings = require("./settings.json");
+var _listenPort = settings.port ? settings.port : '3000';
+var _listenIP = settings.ip ? settings.ip : '10.4.3.177';
+
+//loading players
 var currentUserData = require("./registeredPlayers.json");
 var players = null;
 if (currentUserData)
@@ -26,6 +33,8 @@ else
 	players = {};
 }
 
+
+//regularly save current registered players
 setInterval(function () {
 	fs.writeFile("registeredPlayers.json", JSON.stringify(players), function(err) {
 		if (err)
@@ -130,6 +139,6 @@ function getPlayer (ip)
 	return false;
 }
 
-http.listen(3000, '10.4.3.177', function(){
+http.listen(_listenPort, _listenIP, function(){
   console.log('listening on *:3000');
 });

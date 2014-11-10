@@ -5,74 +5,9 @@
 	<script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
 	<script src="http://code.jquery.com/jquery-1.11.1.js"></script>
 	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/js/bootstrap.min.js"></script>
-	<script>
-	  var socket = io();
-	  $(document).ready(function () {
-		$('form').submit(function(){
-			socket.emit('chat message', $('#m').val());
-			$('#m').val('');
-			return false;
-		});
-
-		socket.on('log-message', function(msg){
-			$('#messages').append($('<li>').text(msg));
-		});
-		
-		socket.on('set-name', function(msg) {
-			$('#player-dropdown').html(msg);
-		});
-		
-		$('#pf-save-button').click(function () {
-			var newName = $('#pf-new-name').val();
-			socket.emit('set-new-name', newName);
-			$('#myModal').modal('toggle');
-		});
-	  });
-	</script>
+	<script src="scripts.js" type="text/javascript"></script>
 	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css">
-	<style>
-	html, body {
-        height: 100%;
-        width: 100%;
-	}
-	
-	#message-holder { margin: 5px 5px 5px 5px; }
-	#messages { list-style-type: none; margin: 0; padding: 0; }
-    #messages li { padding: 5px 5px; }
-    #messages li:nth-child(odd) { background: #eee; }
-	
-	.navbar {
-        margin-bottom: 0;
-	}
-	
-	.modal-body {
-		width: 300px;
-	}
-	
-	.some-container {
-		height: 100%;
-	}
-	.fill {
-		position: relative;
-		top: 4px;
-		height: 100%;
-		min-height: 100%;
-	}
-	#gameboard
-	{
-		right: 5px;
-		border-style: solid;
-		border-width: 1px;
-		border-color: gray;
-	}
-	#log
-	{
-		left: 5px;
-		border-style: solid;
-		border-width: 1px;
-		border-color: gray
-	}
-	</style>
+	<link rel="stylesheet" type="text/css" href="styles.css">
   </head>
   <body>
 	<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
@@ -84,6 +19,10 @@
 		  </div>
 		  <div class="modal-body">
 			<input id="pf-new-name" type="text" class="form-control" placeholder="New Name Here"/>
+			<hr>
+			<p>Are you awesome?</p>
+			<input type="radio" name="awesome" value="1"> Yes <br/>
+			<input type="radio" name="awesome" value="0"> No
 		  </div>
 		  <div class="modal-footer">
 			<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
@@ -105,7 +44,7 @@
 	
 			<ul class="nav navbar-nav navbar-right">
 				<li class="dropdown">
-					<a id="player-dropdown" href="#" class="dropdown-toggle" data-toggle="dropdown">Dropdown
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown"><span id="player-dropdown">Dropdown</span><span class="caret"></span></a>
 					<ul class="dropdown-menu" role="menu">
 						<li><a href="#" data-toggle="modal" data-target="#myModal">Change Name</a></li>
 					</ul>	

@@ -28,6 +28,7 @@ if (currentUserData)
 	for (var i in players)
 	{
 		players[i].connected = false;
+		players[i].inqueue = false;
 		players[i].ingame = false;
 		console.log('checking loaded players: ' + players[i].name + ' ' + players[i].ip);
 	}
@@ -51,10 +52,95 @@ setInterval(function () {
 }, 60000);
 
 //card game
-var FiveTenKing = function (players, deckCount) 
+var playerQueue = [];
+var gamesInProgress = [];
+var FiveTenKing = function (playersList, deckCount) 
 {
-	console.log("New Five Ten King instance created.");
+	if (playersList.length <= 0 || deckCount <= 0)
+	{
+		console.log("Error: initializing 50k with 0 or fewer players or decks" + playersList.length + " " + deckCount);
+		return;
+	}
+	for (var i = 0; i < playersList.length; i ++)
+	{
+		playersList[i].player.inqueue = false;
+		playersList[i].player.ingame = true;
+		playersList[i].hand = [];
+	}
+	this.players = playersList; //[{player: player, playerSocket: socket, hand: [{card: 'd3', value=0}]}]
+	this.deckAssembleMapping = ["3", "4", "5", "6", "7", "8", "9", "10", "j", "q", "k", "1", "2"];
+	this.suitMapping = ["d", "s", "h", "c"];
+	this.dealersCards = []; //[{card: 'd3', value=0}]
+	
+	for (var i = 0; i < deckCount; i ++)
+	{
+		this.assembleDeck();
+	}
+	
+	this.shuffleDeck();
+	this.dealCards();
+	
+	for (var i = 0; i < this.players.length; i++)
+	{
+		console.log("player's hand");
+		for (var j = 0; j < this.players[i].hand.length; j ++)
+		{
+			console.log('Player ' + i + ' was dealt: ' + this.players[i].hand[j].card);
+			this.players[i].playerSocket.emit('log-message', 'Card dealt: ' + this.players[i].hand[j].card);
+		}
+	}
 };
+FiveTenKing.prototype.dealCards = function ()
+{
+	var playerCounterMax = this.players.length - 1;
+	var playerCounter = 0;
+	
+	while (this.dealersCards.length > 0)
+	{
+		var card = this.getNextCard();
+		this.players[playerCounter].hand.push(card);
+		playerCounter ++;
+		if (playerCounter > playerCounterMax)
+		{
+			playerCounter = 0;
+		}
+	}
+}
+FiveTenKing.prototype.getNextCard = function () //NOTE: this function alters the length of the deck
+{
+	if (this.dealersCards.length > 0)
+	{
+		var card = this.dealersCards.splice(0, 1);
+		return card[0];
+	}
+	else
+	{
+		return false;
+	}
+}
+FiveTenKing.prototype.shuffleDeck = function ()
+{
+	for (var i = 0; i < this.dealersCards.length - 1; i ++)
+	{
+		var range = this.dealersCards.length - 1 - i;
+		var newIndex = Math.floor(Math.random() * range) + i + 1;
+		var temp = this.dealersCards[i];
+		this.dealersCards[i] = this.dealersCards[newIndex];
+		this.dealersCards[newIndex] = temp;
+	}
+}
+FiveTenKing.prototype.assembleDeck = function()
+{
+	for (var j = 0; j < this.deckAssembleMapping.length; j ++)
+	{
+		for (var k = 0; k < this.suitMapping.length; k ++)
+		{
+			this.dealersCards.push({card: this.suitMapping[k] + this.deckAssembleMapping[j], value: j});
+		}
+	}
+	this.dealersCards.push({card: "jb", value: this.deckAssembleMapping.length});
+	this.dealersCards.push({card: "jr", value: (this.deckAssembleMapping.length + 1)});
+}
 
 //handling socket requests
 io.on('connection', function(socket){
@@ -80,6 +166,23 @@ io.on('connection', function(socket){
 		socket.emit('log-message', 'Hi there! To get started, give yourself a new name by editing your profile information in the top right dropdown.');
 		socket.emit('log-message', 'If this is your first time, please refer to the rule book in the top bar.');
 	}
+	
+	socket.on('player-is-ready', function () {
+		playerQueue.push({player: playerSearchResult, playerSocket: socket});
+		playerSearchResult.inqueue = true;
+		socket.emit('log-message', 'Searching for a match.');
+		if (playerQueue.length >= 2) //change this to appropriate number
+		{
+			var playerList = [];
+			for (var i = 0; i < playerQueue.length; i ++)
+			{
+				playerQueue[i].playerSocket.emit('log-message', 'Match found!');
+				playerList.push(playerQueue[i]);
+			}
+			gamesInProgress.push(new FiveTenKing(playerList, 1));
+			playerQueue = [];
+		}
+	});
 	
 	socket.on('disconnect', function () {
 		playerSearchResult.connected = false;

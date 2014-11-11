@@ -79,16 +79,6 @@ var FiveTenKing = function (playersList, deckCount)
 	
 	this.shuffleDeck();
 	this.dealCards();
-	
-	for (var i = 0; i < this.players.length; i++)
-	{
-		console.log("player's hand");
-		for (var j = 0; j < this.players[i].hand.length; j ++)
-		{
-			console.log('Player ' + i + ' was dealt: ' + this.players[i].hand[j].card);
-			this.players[i].playerSocket.emit('log-message', 'Card dealt: ' + this.players[i].hand[j].card);
-		}
-	}
 };
 FiveTenKing.prototype.dealCards = function ()
 {
@@ -99,11 +89,19 @@ FiveTenKing.prototype.dealCards = function ()
 	{
 		var card = this.getNextCard();
 		this.players[playerCounter].hand.push(card);
+		console.log('Player ' + playerCounter + ' was dealt: ' + card.card);
+		this.players[playerCounter].playerSocket.emit('ftk-dealt-card', card);
+		//this.players[playerCounter].playerSocket.emit('log-message', 'Card dealt: ' + card.card);
 		playerCounter ++;
 		if (playerCounter > playerCounterMax)
 		{
 			playerCounter = 0;
 		}
+	}
+	
+	for (var i = 0; i < this.players.length; i ++)
+	{
+		this.players[i].playerSocket.emit('ftk-dealing-finished');
 	}
 }
 FiveTenKing.prototype.getNextCard = function () //NOTE: this function alters the length of the deck
@@ -168,10 +166,23 @@ io.on('connection', function(socket){
 	}
 	
 	socket.on('player-is-ready', function () {
+		console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") requests to play a new game.");
+		if (playerSearchResult.inqueue)
+		{
+			console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") is already in queue.");
+			socket.emit('log-message', 'Already in queue, please wait.');
+			return;
+		}
+		else if (playerSearchResult.ingame)
+		{
+			console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") is already in game.");
+			socket.emit('log-message', 'Already in game, please wait until after your game is finished.');
+			return;
+		}
 		playerQueue.push({player: playerSearchResult, playerSocket: socket});
 		playerSearchResult.inqueue = true;
 		socket.emit('log-message', 'Searching for a match.');
-		if (playerQueue.length >= 2) //change this to appropriate number
+		if (playerQueue.length >= 1) //change this to appropriate number
 		{
 			var playerList = [];
 			for (var i = 0; i < playerQueue.length; i ++)
@@ -186,6 +197,8 @@ io.on('connection', function(socket){
 	
 	socket.on('disconnect', function () {
 		playerSearchResult.connected = false;
+		playerSearchResult.ingame = false;
+		playerSearchResult.inqueue = false;
 		console.log('the player ' + playerSearchResult.name + '(' + playerIP + ') has disconnected');
 	});
 	socket.on('set-new-name', function(newName) {

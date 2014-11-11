@@ -161,8 +161,7 @@ io.on('connection', function(socket){
 		players.push({name: "UnamedPlayer", ip:playerIP, connected:true});
 		console.log('a new player connected from ' + playerIP);
 		socket.emit('set-name', 'Click me! <span class="caret"></a>');
-		socket.emit('log-message', 'Hi there! To get started, give yourself a new name by editing your profile information in the top right dropdown.');
-		socket.emit('log-message', 'If this is your first time, please refer to the rule book in the top bar.');
+		socket.emit('log-message', 'Hi there! To get started, give yourself a new name by editing your profile information in the top right dropdown. If this is your first time, please refer to the rule book (coming soon TM) in the top bar.');
 	}
 	
 	socket.on('player-is-ready', function () {

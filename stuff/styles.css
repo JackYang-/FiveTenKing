@@ -17,7 +17,7 @@ html, body {
 }
 
 .some-container {
-	height: 100%;
+	height: 90%;
 }
 .fill {
 	position: relative;
@@ -33,11 +33,23 @@ html, body {
 	border-color: gray;
 	overflow-y: scroll;
 }
-#cardholder
-{
-	position:relative;
-	margin-top: 10px;
-}
+	#cardholder
+	{
+		position:relative;
+		margin-top: 10px;
+	}
+	#button-area
+	{
+		position:relative;
+		margin-top: 10px;
+	}
+	#field-display
+	{
+		position:relative;
+		margin-top: 10px;
+		overflow-x: hidden;
+		overflow-y: hidden;
+	}
 #log
 {
 	left: 5px;

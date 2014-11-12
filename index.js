@@ -278,8 +278,21 @@ FiveTenKing.prototype.calculateComplexPlay = function (cardMap, checkTwosAndJoke
 				console.log(possiblePlays[i].type.name);
 				if (possiblePlays[i].type.name === this.playTypes.SingleStraight.name && stragglers === 0)
 				{
-					console.log("returning play");
+					console.log("evaluation complete: single straight");
 					return possiblePlays[i];
+				}
+				else if (possiblePlays[i].type.name === this.playTypes.DoubleStraight.name && stragglers === 0)
+				{
+					console.log("evaluation complete: double straight");
+					return possiblePlays[i];
+				}
+				else if (possiblePlays[i].type.name === this.playTypes.TripleStraight.name)
+				{
+					if (possiblePlays[i].numTriples * 2 >= possiblePlays[i].numStragglers + stragglers)
+					{
+						console.log("evaluation complete: triple straight");
+						return possiblePlays[i];
+					}
 				}
 			}
 		}
@@ -287,12 +300,160 @@ FiveTenKing.prototype.calculateComplexPlay = function (cardMap, checkTwosAndJoke
 	}
 	else //every recursive call should come here
 	{
+		var initialSearchPoint;
 		var breakingPoint;
 		for (var i = 11; i >= 0; i --)
 		{
 			breakingPoint = i;
+			initialSearchPoint = i;
 			console.log("Trace: " + i);
-			if (cardMap[i] === 1) //we found a single
+			if (cardMap[i] >= 3) //we found a triple or above
+			{
+				var cardCount = cardMap[i];
+				console.log("Found", cardCount, "cards");
+				numCards += cardCount;
+				if (i >= 0)
+				{
+					console.log("initiating search for longest triple straight from here");
+					var triTracerStart = i;
+					var triTracerIndex = i;
+					var triLength = 0;
+					while (triTracerIndex >= 0 && cardMap[triTracerIndex] >= 3)
+					{
+						stragglers += cardMap[triTracerIndex] - 3;
+						console.log("looking for triple straight:", (triLength + 1), "th triple found.");
+						console.log("current number of stragglers: " + stragglers);
+						triLength ++;
+						triTracerIndex --;
+					}
+					if (triTracerIndex === -1)
+					{
+						console.log("triple straight inner trace went to bottom; checking straggler count to see if play is valid");
+						console.log("number of triples: " + triLength);
+						console.log("number of stragglers: " + stragglers);
+						if (triLength * 2 >= stragglers)
+						{
+							console.log("straggler count is below the maximum, this play is viable");
+							possiblePlays.push({type: this.playTypes.TripleStraight, strength: triTracerStart, length: triLength, numTriples: triLength, numStragglers: stragglers});
+							return possiblePlays;
+						}
+						else
+						{
+							console.log("too many stragglers, play is not viable");
+							stragglers += triLength * 3;
+							breakingPoint = triTracerIndex + 1;
+							break;
+						}
+					}
+					else if (cardMap[triTracerIndex] <= 2)
+					{
+						console.log("triple straight search ended because we stumbled upon a non-triple (0, 1 or 2 cards)");
+						console.log("will attempt to check if there are sufficient leftover cards to make a play with the current triple straight");
+						
+						var numCardsToTheLeft = 0;
+						for (var j = triTracerIndex; j >= 0; j --)
+						{
+							numCardsToTheLeft += cardMap[j];
+						}
+						console.log(numCardsToTheLeft + " cards are found to the left of this triple play");
+						console.log("there are also " + stragglers + " stragglers");
+						if ((triLength * 2) >= (stragglers + numCardsToTheLeft))
+						{
+							console.log("There are enough triples to hold the total number of stragglers. Valid play.");
+							possiblePlays.push({type: this.playTypes.TripleStraight, strength: triTracerStart, length: triLength, numTriples: triLength, numStragglers: stragglers});
+							return possiblePlays;
+						}
+						else
+						{
+							console.log("There are not enough triples to hold the stragglers. Play is not viable: every card becomes straggler");
+							stragglers += triLength * 3;
+							breakingPoint = triTracerIndex + 1;
+							break;
+						}
+						
+					}
+				}
+			}
+			else if (cardMap[i] === 2) //we found a double
+			{
+				console.log("Found a double");
+				numCards += 2;
+				if (i >= 1 && stragglers === 0)
+				{
+					console.log("potential for double straight");
+					var dsTracerStart = i;
+					var dsTracerIndex = i;
+					var dsLength = 0;
+					while (dsTracerIndex >= 0 && cardMap[dsTracerIndex] === 2)
+					{
+						console.log("looking for double straight: " + (dsLength + 1) + "th double found.");
+						dsLength ++;
+						dsTracerIndex --;
+					}
+					if (dsTracerIndex === -1)
+					{
+						console.log("double straight inner trace went to bottom");
+						possiblePlays.push({type: this.playTypes.DoubleStraight, strength: dsTracerStart, length: dsLength, numTriples: 0, numStragglers: 0});
+						return possiblePlays;
+					}
+					else if (cardMap[dsTracerIndex] === 0 && dsLength >= 2)
+					{
+						console.log("empty block hit while checking for double straights");
+						var numCardsToTheLeft = 0;
+						for (var j = dsTracerIndex; j >= 0; j --)
+						{
+							numCardsToTheLeft += cardMap[j];
+						}
+						if (numCardsToTheLeft > 0)
+						{
+							console.log("found cards to the left, no double straight");
+							stragglers += dsLength * 2;
+							breakingPoint = dsTracerIndex + 1;
+							break;
+						}
+						else
+						{
+							console.log("no cards on the left, double straight found");
+							possiblePlays.push({type: this.playTypes.DoubleStraight, strength: dsTracerStart, length: dsLength, numTriples: 0, numStragglers: 0});
+							return possiblePlays;
+						}
+					}
+					else if (cardMap[dsTracerIndex] >= 3) //we've seen a triple, there's hope! 
+					{
+						console.log("double straight not possible but a triple has been spotted");
+						stragglers += dsLength * 2;
+						for (var l = dsTracerIndex + 1; l < cardMap.length; l ++)
+						{
+							cardMap[l] = 0;
+						}
+						var potentialPlaysFromRest = this.calculateComplexPlay(cardMap, false);
+						for (var k = potentialPlaysFromRest.length - 1; k >= 0; k --)
+						{
+							if (!(potentialPlaysFromRest[k].type.name === this.playTypes.TripleStraight.name))
+							{
+								potentialPlaysFromRest.splice(k, 1);
+							}
+							else
+							{
+								potentialPlaysFromRest[k].numStragglers += stragglers;
+								if (potentialPlaysFromRest[k].numTriples * 2 < potentialPlaysFromRest[k].numStragglers)
+								{
+									potentialPlaysFromRest.splice(k, 1);
+								}
+							}
+						}
+						return potentialPlaysFromRest;
+					}
+					else
+					{
+						console.log("bumped into a non 2, or the straight is not long enough");
+						stragglers += dsLength * 2; //cardMap[straightTracerIndex];
+						breakingPoint = straightTracerIndex + 1;
+						break;
+					}
+				}
+			}
+			else if (cardMap[i] === 1) //we found a single
 			{
 				console.log("Found a single");
 				numCards ++;
@@ -335,10 +496,36 @@ FiveTenKing.prototype.calculateComplexPlay = function (cardMap, checkTwosAndJoke
 							return possiblePlays;
 						}
 					}
-					else //either we've bumped into a 2+, or the straights not long enough
+					else if (cardMap[straightTracerIndex] >= 3) //we've seen a triple, there's hope! 
 					{
-						console.log("either we've bumped into a 2+, or the straights not long enough");
-						stragglers += straightLength + cardMap[straightTracerIndex];
+						console.log("straight not possible but a triple has been spotted");
+						stragglers += straightLength;
+						for (var l = straightTracerIndex + 1; l < cardMap.length; l ++)
+						{
+							cardMap[l] = 0;
+						}
+						var potentialPlaysFromRest = this.calculateComplexPlay(cardMap, false);
+						for (var k = potentialPlaysFromRest.length - 1; k >= 0; k --)
+						{
+							if (!(potentialPlaysFromRest[k].type.name === this.playTypes.TripleStraight.name))
+							{
+								potentialPlaysFromRest.splice(k, 1);
+							}
+							else
+							{
+								potentialPlaysFromRest[k].numStragglers += stragglers;
+								if (potentialPlaysFromRest[k].numTriples * 2 < potentialPlaysFromRest[k].numStragglers)
+								{
+									potentialPlaysFromRest.splice(k, 1);
+								}
+							}
+						}
+						return potentialPlaysFromRest;
+					}
+					else //either we've bumped into a double, or the straights not long enough
+					{
+						console.log("either we've bumped into a double, or the straights not long enough");
+						stragglers += straightLength; //cardMap[straightTracerIndex];
 						breakingPoint = straightTracerIndex + 1;
 						break;
 					}
@@ -548,7 +735,7 @@ io.on('connection', function(socket){
 				playerQueue[i].playerSocket.emit('log-message', 'Match found!');
 				playerList.push(playerQueue[i]);
 			}
-			var newGameInstance = new FiveTenKing(playerList, 1);
+			var newGameInstance = new FiveTenKing(playerList, 2); //edit deck count
 			gamesInProgress.push(newGameInstance);
 			for (var i = 0; i < playerList.length; i ++) //need to keep track of the games that the players are in
 			{

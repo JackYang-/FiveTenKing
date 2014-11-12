@@ -54,6 +54,7 @@ setInterval(function () {
 //card game
 var playerQueue = [];
 var gamesInProgress = [];
+var playerGameMap = {};
 var FiveTenKing = function (playersList, deckCount) 
 {
 	if (playersList.length <= 0 || deckCount <= 0)
@@ -68,9 +69,37 @@ var FiveTenKing = function (playersList, deckCount)
 		playersList[i].hand = [];
 	}
 	this.players = playersList; //[{player: player, playerSocket: socket, hand: [{card: 'd3', value=0}]}]
+	this.indexAtIP = {}; //{ "ip": index of players array which contains the player }
+	for (var i = 0; i < this.players.length; i ++)
+	{
+		this.indexAtIP[this.players[i].player.ip] = i;
+	}
 	this.deckAssembleMapping = ["3", "4", "5", "6", "7", "8", "9", "10", "j", "q", "k", "1", "2"];
 	this.suitMapping = ["d", "s", "h", "c"];
 	this.dealersCards = []; //[{card: 'd3', value=0}]
+	this.playTypes = {
+		NoPlay: {name: "No Play", overrideFactor: 0},
+		Unknown: {name: "Unknown Play", overrideFactor: 0},
+		Single: {name: "Single", overrideFactor: 1},
+		SingleStraight: {name: "Single Straight", overrideFactor: 1},
+		DoubleStraight: {name: "Double Straight", overrideFactor: 1},
+		TripleStraight: {name: "Triple Straight", overrideFactor: 1},
+		FiveTenKing: {name: "Five Ten King", overrideFactor: 2},
+		FiveTenKingSameSuit: {name: "Same Suit Five Ten King", overrideFactor: 3},
+		Quad: {name: "Quad", overrideFactor: 4}
+	}
+	this.turnOwnerIP = "";
+	this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
+	//playType is the 'type' of the new play (self explanatory)
+	//a play with a higher overrideFactor automatically trumps a play with lower overrideFactor (ie: five ten king will have a higher override factor than a triple)
+		//Single, Double, Triple and all straights have overrideFactor 1
+		//vanila five ten kings have overrideFactor 2
+		//five ten kings with all 3 cards of the same suit has overrideFactor 3
+		//quads have overrideFactor 4
+	//if a play is made with the same overrideFactor as the lastPlay, then:
+		//if lastPlay's length is non-zero, it means lastPlay is some type of straight; newPlay's length must match the lastPlay's length
+		//newPlay's type.name must match lastPlay's type.name
+		//in all cases, newPlay's strength must be strictly greater than lastPlay's strength to trump it
 	
 	for (var i = 0; i < deckCount; i ++)
 	{
@@ -80,6 +109,315 @@ var FiveTenKing = function (playersList, deckCount)
 	this.shuffleDeck();
 	this.dealCards();
 };
+FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)
+{
+	var playResult = this.calculatePlay(cardsToPlay);
+	var trump = false;
+	if (!(playResult.type.name === this.playTypes.Unknown.name || playResult.type.name === this.playTypes.NoPlay.name))
+	{
+		if (playResult.type.overrideFactor > this.lastPlay.type.overrideFactor || //overrideFactor is greater OR:
+				(playResult.type.overrideFactor === this.lastPlay.type.overrideFactor //same override factor
+					&& playResult.type.name === this.lastPlay.type.name //same type
+					&& playResult.strength > this.lastPlay.strength //greater strength
+					&& playResult.length === this.lastPlay.length)) //same length
+		{
+			console.log("new " + playResult.type.name + " play trumps old play");
+			this.lastPlay = playResult;
+			return true;
+		}
+		else
+		{
+			console.log("new " + playResult.type.name + " play did not trump old play");
+			return false;
+		}
+	}
+	else
+	{
+		console.log("play failed to evaluate; type played: " + playResult.type.name);
+		return false;
+	}
+}
+
+FiveTenKing.prototype.calculatePlay = function (cardsToPlay)//returns an object of the form {type: int, strength: int, length: int}
+{
+	if (cardsToPlay.length === 1) //checking for singles
+	{
+		return {type: this.playTypes.Single, strength: cardsToPlay[0].value, length: 0};
+	}
+	if (cardsToPlay.length === 2) //checking for doubles; ensure both cards have the same value for a valid double
+	{
+		if (cardsToPlay[0].value === cardsToPlay[1].value)
+		{
+			return {type: this.playTypes.DoubleStraight, strength: cardsToPlay[0].value, length: 1};
+		}
+		else
+		{
+			return {type: this.playTypes.Unknown, strength: 0, length: 0};
+		}
+	}
+	if (cardsToPlay.length === 3) //checking for five ten king only
+	{
+		var five = false;
+		var ten = false;
+		var king = false;
+		var sameSuit = true;
+		var firstSuit = cardsToPlay[0].suit;
+		for (var i = 0; i < cardsToPlay.length; i ++)
+		{
+			var cardValue = cardsToPlay[i].value;
+			if (cardValue === this.deckAssembleMapping.indexOf("5"))
+			{
+				five = true;
+			}
+			if (cardValue === this.deckAssembleMapping.indexOf("10"))
+			{
+				ten = true;
+			}
+			if (cardValue === this.deckAssembleMapping.indexOf("k"))
+			{
+				king = true;
+			}
+			if (!(cardsToPlay[i].suit === firstSuit))
+			{
+				sameSuit = false;
+			}
+		}
+		if (five && ten && king)
+		{
+			if (sameSuit)
+			{
+				return {type: this.playTypes.FiveTenKingSameSuit, strength: 0, length :0};
+			}
+			else
+			{
+				return {type: this.playTypes.FiveTenKing, strength: 0, length: 0};
+			}
+		}
+	}
+	if (cardsToPlay.length === 4) //checking for quads only
+	{
+		var firstValue = cardsToPlay[0].value;
+		var isQuad = true;
+		for (var i = 0; i < cardsToPlay.length; i ++)
+		{
+			if (!(cardsToPlay[i].value === firstValue))
+			{
+				isQuad = false;
+			}
+		}
+		if (isQuad)
+		{
+			return {type: this.playTypes.Quad, strength: firstValue, length: 0}; 
+		}
+	}
+	
+	//this part gets evaluated if the played is not simple and requires more complex evaluation
+	var cardMap = []; //cardMap's index is the value of the cards (0 is 3, 1 is 4, 14 is big joker) and the element at the index is how many cards are there of that value
+	for (var i = 0; i < 15; i ++)
+	{
+		cardMap[i] = 0;
+	}
+	for (var i = 0; i < cardsToPlay.length; i ++)
+	{
+		cardMap[cardsToPlay[i].value] ++;
+	}
+	for (var i = 0; i < cardMap.length ; i ++)
+	{
+		console.log("map index: " + i + " | count: " + cardMap[i]);
+	}
+	var complexResult = this.calculateComplexPlay(cardMap, true); //this returns more than you will need, so we only extract the pieces we need
+	
+	return {type: complexResult.type, strength: complexResult.strength, length: complexResult.length};
+	
+}
+//This function is reached when the play is not a single, not a double, not a five ten king and not a quad
+FiveTenKing.prototype.calculateComplexPlay = function (cardMap, checkTwosAndJokers)
+{
+	var returnObject = {type: this.playTypes.Unknown, strength: 0, length: 0};
+	
+	var stragglers = 0; //stragglers are cards that can't fit into any combo so they must be a part of a triple or a triple straight
+						//if there are more straggler's than there are 2 times the total number of playable consecutive triples, then we return an Unknown play
+	var numCards = 0; //this holds the total number of cards that have been evaluated so far
+					 //important because we start evaluating from the end to the front of the map, if the front of the map contains a large triple straight then it's possible for all the cards near the end to be stragglers
+	var consecutiveTriplesInScope = 0; //this holds the number of triples seen in the scope so far
+	var possiblePlays = [];
+	
+	if (checkTwosAndJokers) //only evaluates to true on the first call
+	{
+		stragglers += cardMap[14] + cardMap[13];//cardMap[14] is the number of big jokers, cardMap[13] is the number of small jokers
+												//jokers are special because they cannot be combo'd at all
+		numCards += cardMap[14] + cardMap[13];
+		var numTwos = cardMap[12]; //cardMap[12] is the number of 2's. 2's cannot be a part of a straight but they can be used as standalone triples
+		numCards += numTwos;
+		if (numTwos <= 5 && numTwos >= 3)
+		{
+			stragglers += numTwos - 3; //3-5 two's can imply that a triple 2 wants to be played
+			consecutiveTriplesInScope = 1;
+		}
+		else
+		{
+			stragglers += numTwos; //1 or 2 or 6+ two's imply that they are stragglers since it's impossible to play them as standalones
+		}
+		
+		cardMap[14] = 0;
+		cardMap[13] = 0;
+		cardMap[12] = 0;
+		possiblePlays = this.calculateComplexPlay(cardMap, false); //by recursion, find all the possible valid plays with the rest of the elements in the cardMap
+		if (possiblePlays.length === 0 && consecutiveTriplesInScope > 0 && consecutiveTriplesInScope * 2 >= stragglers) //this should be true when there are no cards other than 2's and jokers in the play
+		{																				//and when there's a triple 2 in play
+			console.log("triple 2 detected");
+			returnObject.type = this.playTypes.TripleStraight;
+			returnObject.strength = 12;
+			return returnObject;
+		}
+		else if (possiblePlays.length > 0)
+		{
+			console.log("there are valid possible plays");
+			for (var i = 0; i < possiblePlays.length; i ++)
+			{
+				console.log(possiblePlays[i].type.name);
+				if (possiblePlays[i].type.name === this.playTypes.SingleStraight.name && stragglers === 0)
+				{
+					console.log("returning play");
+					return possiblePlays[i];
+				}
+			}
+		}
+		return returnObject;
+	}
+	else //every recursive call should come here
+	{
+		var breakingPoint;
+		for (var i = 11; i >= 0; i --)
+		{
+			breakingPoint = i;
+			console.log("Trace: " + i);
+			if (cardMap[i] === 1) //we found a single
+			{
+				console.log("Found a single");
+				numCards ++;
+				if (i >= 4 && stragglers === 0) //there is potential for a single straight, loop down from this point until we find a non-single to find a straight
+				{
+					console.log("potential for single straight");
+					var straightTracerStart = i;
+					var straightTracerIndex = i;
+					var straightLength = 0;
+					while (straightTracerIndex >= 0 && cardMap[straightTracerIndex] === 1) //keep tracing through straight until we hit bottom of map or the straight is broken
+					{
+						straightLength ++;
+						straightTracerIndex --;
+					}
+					if (straightTracerIndex === -1) //tracer went to bottom; must be a straight
+					{
+						console.log("inner tracer went to bottom");
+						possiblePlays.push({type: this.playTypes.SingleStraight, strength: straightTracerStart, length: straightLength, numTriples: 0, numStragglers: 0});
+						return possiblePlays;
+					}
+					else if (cardMap[straightTracerIndex] === 0 && straightLength >= 5) //we've hit an empty block, so there's still a possibility that we've found a straight and there are no more cards on the left
+					{
+						console.log("empty block, maybe there is a straight");
+						var numCardsToTheLeft = 0;
+						for (var j = straightTracerIndex; j >= 0; j --)
+						{
+							numCardsToTheLeft += cardMap[j]; 
+						}
+						if (numCardsToTheLeft > 0) //there are cards to the left, so our straight cannot be played; all the cards found are stragglers
+						{
+							console.log("there are cards to the left, so no straight");
+							stragglers += straightLength;
+							breakingPoint = straightTracerIndex + 1;
+							break;
+						}
+						else //there are no cards to the left, we've found a straight!
+						{
+							console.log("no cards to the left, found straight!");
+							possiblePlays.push({type: this.playTypes.SingleStraight, strength: straightTracerStart, length: straightLength, numTriples: 0, numStragglers: 0});
+							return possiblePlays;
+						}
+					}
+					else //either we've bumped into a 2+, or the straights not long enough
+					{
+						console.log("either we've bumped into a 2+, or the straights not long enough");
+						stragglers += straightLength + cardMap[straightTracerIndex];
+						breakingPoint = straightTracerIndex + 1;
+						break;
+					}
+					
+				}
+				else //not enough numbers to form a single straight, so all the numbers from here on out must be stragglers
+				{
+					console.log("not enough numbers to form a single straight, so all the numbers from here on out must be stragglers");
+					stragglers ++;
+				}
+			}
+		}
+		
+		for (var i = breakingPoint; i < cardMap.length; i ++) //remove cards that have been processed from the cardmap
+		{
+			cardMap[breakingPoint] = 0;
+		}
+		
+		if (breakingPoint > 0)
+		{
+			console.log("breaking point is nonzero");
+			possiblePlays = this.calculateComplexPlay(cardMap, false);
+			if (stragglers > 0)
+			{
+				console.log("there are stragglers (nonzero breakpoint)");
+				for (var i = possiblePlays.length - 1; i >= 0; i --) //iterate backwards to not displace elements when splicing
+				{
+					if (!(possiblePlays[i].type.name === this.playTypes.TripleStraight.name))
+					{
+						possiblePlays.splice(i, 1);
+					}
+					else
+					{
+						possiblePlays[i].numStragglers += stragglers;
+						if (possiblePlays[i].numTriples * 2 < possiblePlays[i].numStragglers)
+						{
+							possiblePlays.splice(i, 1);
+						}
+					}
+				}
+				return possiblePlays;
+			}
+			else
+			{
+				console.log("there are no stragglers (nonzero breakpoint)");
+				return possiblePlays;
+			}
+		}
+		else
+		{
+			console.log("breaking point is zero");
+			if (stragglers > 0)
+			{
+				console.log("there are stragglers (zero breakpoint)");
+				possiblePlays.push({type: this.playTypes.Unknown, strength: 0, length: 0, numTriples: consecutiveTriplesInScope, numStragglers: stragglers});
+				return possiblePlays;
+			}
+			else
+			{
+				console.log("there are no stragglers (nonzero breakpoint)");
+				return possiblePlays;
+			}
+		}
+	}	
+}
+//TODO: data sanity checks and send a token to the client to prevent it from sending bad requests
+FiveTenKing.prototype.handleCommand = function (ip, command, data)
+{
+	console.log('Five Ten King received command');
+	switch (command)
+	{
+		case 'ftkcmd-make-play':
+			console.log('ftkcmd-make-play has been called');
+			return this.handlePlay(ip, data);
+			break;
+		default:
+			return false;
+	}
+}
 FiveTenKing.prototype.dealCards = function ()
 {
 	var playerCounterMax = this.players.length - 1;
@@ -89,7 +427,17 @@ FiveTenKing.prototype.dealCards = function ()
 	{
 		var card = this.getNextCard();
 		this.players[playerCounter].hand.push(card);
-		console.log('Player ' + playerCounter + ' was dealt: ' + card.card);
+		if (card.card === 'd3' && !this.turnOwnerIP)
+		{
+			console.log('The first 3 of diamonds was dealt to ' + this.players[playerCounter].player.name + '(' + this.players[playerCounter].player.ip + ')');
+			this.turnOwnerIP = this.players[playerCounter].player.ip;
+			var firstTurnPlayerName = this.players[playerCounter].player.name;
+			for (var j = 0; j < this.players.length; j ++)
+			{
+				this.players[j].playerSocket.emit('log-message', firstTurnPlayerName + ' has snatched the first turn by drawing the first 3 of diamonds.');
+			}
+		}
+		//console.log('Player ' + playerCounter + ' was dealt: ' + card.card);
 		this.players[playerCounter].playerSocket.emit('ftk-dealt-card', card);
 		//this.players[playerCounter].playerSocket.emit('log-message', 'Card dealt: ' + card.card);
 		playerCounter ++;
@@ -133,7 +481,7 @@ FiveTenKing.prototype.assembleDeck = function()
 	{
 		for (var k = 0; k < this.suitMapping.length; k ++)
 		{
-			this.dealersCards.push({card: this.suitMapping[k] + this.deckAssembleMapping[j], value: j});
+			this.dealersCards.push({card: this.suitMapping[k] + this.deckAssembleMapping[j], suit: this.suitMapping[k], value: j});
 		}
 	}
 	this.dealersCards.push({card: "jb", value: this.deckAssembleMapping.length});
@@ -164,6 +512,16 @@ io.on('connection', function(socket){
 		socket.emit('log-message', 'Hi there! To get started, give yourself a new name by editing your profile information in the top right dropdown. If this is your first time, please refer to the rule book (coming soon TM) in the top bar.');
 	}
 	
+	socket.on('ftk-move', function (command, data, callback) {
+		console.log('Five Ten King command initiated from ' + playerSearchResult.name + '(' + playerIP + ').');
+		var result = playerGameMap[playerIP].handleCommand(playerIP, command, data);
+		if (!(result === true || result === false))
+		{
+			result = false;
+		}
+		callback(result);
+	});
+	
 	socket.on('player-is-ready', function () {
 		console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") requests to play a new game.");
 		if (playerSearchResult.inqueue)
@@ -181,15 +539,21 @@ io.on('connection', function(socket){
 		playerQueue.push({player: playerSearchResult, playerSocket: socket});
 		playerSearchResult.inqueue = true;
 		socket.emit('log-message', 'Searching for a match.');
-		if (playerQueue.length >= 1) //change this to appropriate number
+		
+		if (playerQueue.length >= 1) //change to appropriate number
 		{
 			var playerList = [];
-			for (var i = 0; i < playerQueue.length; i ++)
+			for (var i = 0; i < playerQueue.length; i ++) //message player for game found; assemble players for new game instance
 			{
 				playerQueue[i].playerSocket.emit('log-message', 'Match found!');
 				playerList.push(playerQueue[i]);
 			}
-			gamesInProgress.push(new FiveTenKing(playerList, 1));
+			var newGameInstance = new FiveTenKing(playerList, 1);
+			gamesInProgress.push(newGameInstance);
+			for (var i = 0; i < playerList.length; i ++) //need to keep track of the games that the players are in
+			{
+				playerGameMap[playerIP] = newGameInstance;
+			}
 			playerQueue = [];
 		}
 	});

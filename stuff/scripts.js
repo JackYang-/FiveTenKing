@@ -1,3 +1,4 @@
+(function () {
 var socket = io();
 var cardsInHand = [];
 $(document).ready(function () {
@@ -6,9 +7,7 @@ $(document).ready(function () {
 
 	//accept log messages; will drop scrollbar to bottom every time a new message is received
 	socket.on('log-message', function(msg){
-		$('#messages').append($('<li>').text(msg));
-		var messageBox = document.getElementById("log");
-		messageBox.scrollTop = messageBox.scrollHeight;
+		logMessage(msg);
 	});	
 	
 	//called on name change success
@@ -84,28 +83,39 @@ function playSelectedCards()
 		cardsToPlay.push(cardsInHand[arrayIndex]);
 	});
 	
-	//make socket request to play hand
-	
-	//assuming hand was played successfully, sort selectedIndices in reverse order so that when splicing, no elements get displaced
-	selectedIndices.sort(function (a, b) {
-		return b - a;
-	});
-	for (var i = 0; i < selectedIndices.length; i ++)
+	if (cardsToPlay.length <= 0)
 	{
-		cardsInHand.splice(selectedIndices[i], 1);
+		logMessage('Can\'t make a move without playing a card. Click \'Pass\' to pass your turn.');
+		return;
 	}
-	displayHand();
 	
-	//sort in ascending order because the display loop prepends all the cards so the cards get flipped
-	cardsToPlay.sort(function (a, b) {
-		return a.value - b.value;
+	socket.emit('ftk-move', 'ftkcmd-make-play', cardsToPlay, function (approved) {
+		if (approved)
+		{
+			selectedIndices.sort(function (a, b) {
+				return b - a; //sort selectedIndices in *reverse* order so that when splicing, no elements get displaced
+			});
+			for (var i = 0; i < selectedIndices.length; i ++) //remove each played cards from hand
+			{
+				cardsInHand.splice(selectedIndices[i], 1);
+			}
+			displayHand();
+			
+			cardsToPlay.sort(function (a, b) {
+				return a.value - b.value; //sort in ascending order because the display loop prepends all the cards so the cards get flipped
+			});
+			
+			$('#field-display').empty();
+			for (var i = 0; i < cardsToPlay.length; i ++)
+			{
+				$('#field-display').prepend("<img src='cards_png/" + cardsToPlay[i].card + ".png'>");
+			}
+		}
+		else
+		{
+			logMessage('Play rejected.');
+		}
 	});
-	
-	$('#field-display').empty();
-	for (var i = 0; i < cardsToPlay.length; i ++)
-	{
-		$('#field-display').prepend("<img src='cards_png/" + cardsToPlay[i].card + ".png'>");
-	}
 }
 
 //shows all the cards in the players hand in stacked fashion; after each call this function adjusts the location of the field display
@@ -141,3 +151,11 @@ function setFieldDisplay(lineNumber)
 {
 	$('#field-display').css("top", lineNumber * 125 + 40);
 }
+
+function logMessage (message)
+{
+	$('#messages').append($('<li>').text(message));
+	var messageBox = document.getElementById("log");
+	messageBox.scrollTop = messageBox.scrollHeight;
+}
+})();

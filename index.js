@@ -18,6 +18,8 @@ var settings = require("./settings.json");
 var _listenPort = settings.port ? settings.port : '3000';
 var _listenIP = settings.ip ? settings.ip : 'asdf';
 var _playersFile = settings.playersFilePath ? settings.playersFilePath : './registeredPlayers.json';
+var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 2;
+var _FTKQueueCap = settings.queueCap ? settings.queueCap : 1;
 
 //loading players
 var currentUserData = require(_playersFile);
@@ -246,7 +248,7 @@ FiveTenKing.prototype.calculateComplexPlay = function (cardMap, checkTwosAndJoke
 	{
 		stragglers += cardMap[14] + cardMap[13];//cardMap[14] is the number of big jokers, cardMap[13] is the number of small jokers
 												//jokers are special because they cannot be combo'd at all
-		numCards += cardMap[14] + cardMap[13];
+		numCards += stragglers;
 		var numTwos = cardMap[12]; //cardMap[12] is the number of 2's. 2's cannot be a part of a straight but they can be used as standalone triples
 		numCards += numTwos;
 		if (numTwos <= 5 && numTwos >= 3)
@@ -276,22 +278,30 @@ FiveTenKing.prototype.calculateComplexPlay = function (cardMap, checkTwosAndJoke
 			for (var i = 0; i < possiblePlays.length; i ++)
 			{
 				console.log(possiblePlays[i].type.name);
-				if (possiblePlays[i].type.name === this.playTypes.SingleStraight.name && stragglers === 0)
+				if (possiblePlays[i].type.name === this.playTypes.SingleStraight.name && numCards === 0) //using numCards instead of stragglers because triple 2's cannot be played together with straights
 				{
 					console.log("evaluation complete: single straight");
 					return possiblePlays[i];
 				}
-				else if (possiblePlays[i].type.name === this.playTypes.DoubleStraight.name && stragglers === 0)
+				else if (possiblePlays[i].type.name === this.playTypes.DoubleStraight.name && numCards === 0)
 				{
 					console.log("evaluation complete: double straight");
 					return possiblePlays[i];
 				}
 				else if (possiblePlays[i].type.name === this.playTypes.TripleStraight.name)
 				{
-					if (possiblePlays[i].numTriples * 2 >= possiblePlays[i].numStragglers + stragglers)
+					if (possiblePlays[i].numTriples * 2 >= possiblePlays[i].numStragglers + numCards)
 					{
 						console.log("evaluation complete: triple straight");
 						return possiblePlays[i];
+					}
+				}
+				else if (possiblePlays[i].type.name === this.playTypes.Unknown.name && possiblePlays[i].numStragglers > 0)
+				{
+					if (consecutiveTriplesInScope * 2 >= (possiblePlays[i].numStragglers))
+					{
+						console.log("evaluation complete: triple straight of two's");
+						return {type: this.playTypes.TripleStraight, strength: 12, length: 1};
 					}
 				}
 			}
@@ -727,7 +737,7 @@ io.on('connection', function(socket){
 		playerSearchResult.inqueue = true;
 		socket.emit('log-message', 'Searching for a match.');
 		
-		if (playerQueue.length >= 1) //change to appropriate number
+		if (playerQueue.length >= _FTKQueueCap) //change to appropriate number
 		{
 			var playerList = [];
 			for (var i = 0; i < playerQueue.length; i ++) //message player for game found; assemble players for new game instance
@@ -735,7 +745,7 @@ io.on('connection', function(socket){
 				playerQueue[i].playerSocket.emit('log-message', 'Match found!');
 				playerList.push(playerQueue[i]);
 			}
-			var newGameInstance = new FiveTenKing(playerList, 2); //edit deck count
+			var newGameInstance = new FiveTenKing(playerList, _numDecksForFTK); //edit deck count
 			gamesInProgress.push(newGameInstance);
 			for (var i = 0; i < playerList.length; i ++) //need to keep track of the games that the players are in
 			{

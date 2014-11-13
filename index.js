@@ -19,8 +19,8 @@ var settings = require("./settings.json");
 var _listenPort = settings.port ? settings.port : '3000';
 var _listenIP = settings.ip ? settings.ip : 'asdf';
 var _playersFile = settings.playersFilePath ? settings.playersFilePath : './registeredPlayers.json';
-var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 2;
-var _FTKQueueCap = settings.queueCap ? settings.queueCap : 1;
+var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 1;
+var _FTKQueueCap = settings.queueCap ? settings.queueCap : 2;
 
 //loading players
 var currentUserData = require(_playersFile);
@@ -84,6 +84,7 @@ io.on('connection', function(socket){
 	}
 	
 	socket.on('ftk-move', function (command, data, callback) {
+		console.log('-------------------------------------------------------------------------------');
 		console.log('Five Ten King command initiated from ' + playerSearchResult.name + '(' + playerIP + ').');
 		var result = playerGameMap[playerIP].handleCommand(playerIP, command, data);
 		if (!(result === true || result === false))
@@ -91,6 +92,7 @@ io.on('connection', function(socket){
 			result = false;
 		}
 		callback(result);
+		console.log('-------------------------------------------------------------------------------');
 	});
 	
 	socket.on('player-is-ready', function () {
@@ -107,7 +109,7 @@ io.on('connection', function(socket){
 			socket.emit('log-message', 'Already in game, please wait until after your game is finished.');
 			return;
 		}
-		playerQueue.push({player: playerSearchResult, playerSocket: socket});
+		playerQueue.push({player: playerSearchResult, socket: socket});
 		playerSearchResult.inqueue = true;
 		socket.emit('log-message', 'Searching for a match.');
 		
@@ -116,14 +118,14 @@ io.on('connection', function(socket){
 			var playerList = [];
 			for (var i = 0; i < playerQueue.length; i ++) //message player for game found; assemble players for new game instance
 			{
-				playerQueue[i].playerSocket.emit('log-message', 'Match found!');
+				playerQueue[i].socket.emit('log-message', 'Match found!');
 				playerList.push(playerQueue[i]);
 			}
 			var newGameInstance = new ftk.FiveTenKing(playerList, _numDecksForFTK);
 			gamesInProgress.push(newGameInstance);
 			for (var i = 0; i < playerList.length; i ++) //need to keep track of the games that the players are in
 			{
-				playerGameMap[playerIP] = newGameInstance;
+				playerGameMap[playerList[i].player.ip] = newGameInstance;
 			}
 			playerQueue = [];
 		}

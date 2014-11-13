@@ -25,7 +25,15 @@ $(document).ready(function () {
 		$('#button-area').show();
 		displayHand();
 	});
+	
+	socket.on('ftk-latest-play', function (cards) {
+		displayToField(cards);
+	});
 
+	socket.on('ftk-clear-display', function () {
+		$('#field-display').empty();
+	});
+	
 	//this is the button click that saves user profile information
 	$('#pf-save-button').click(function () {
 		var newName = $('#pf-new-name').val();
@@ -43,6 +51,11 @@ $(document).ready(function () {
 	//button click that lets user play the selected cards in hand
 	$('#ftk-play-hand').click(function () {
 		playSelectedCards();
+	});
+	
+	//button click for pass
+	$('#ftk-pass').click(function () {
+		passTurn();
 	});
 });
 
@@ -70,6 +83,13 @@ $(document).on('click', '.cardsReady', function (e) {
 	thisThing.removeClass("cardsReady");
 	thisThing.addClass("cardsInHand");
 });
+
+function passTurn()
+{
+	socket.emit('ftk-move', 'ftkcmd-pass-turn', 'pass-turn', function (approved) {
+	
+	});
+}
 
 //assembles the list of cards to play and requests to play it
 //if play is successful, remove the played cards from the hand, display the played cards in field-display and re-display the hand
@@ -101,21 +121,26 @@ function playSelectedCards()
 			}
 			displayHand();
 			
-			cardsToPlay.sort(function (a, b) {
-				return a.value - b.value; //sort in ascending order because the display loop prepends all the cards so the cards get flipped
-			});
-			
-			$('#field-display').empty();
-			for (var i = 0; i < cardsToPlay.length; i ++)
-			{
-				$('#field-display').prepend("<img src='cards_png/" + cardsToPlay[i].card + ".png'>");
-			}
+			//displayToField(cardsToPlay);
 		}
 		else
 		{
 			logMessage('Play rejected.');
 		}
 	});
+}
+
+function displayToField(cards)
+{
+	cards.sort(function (a, b) {
+		return a.value - b.value; //sort in ascending order because the display loop prepends all the cards so the cards get flipped
+	});
+	
+	$('#field-display').empty();
+	for (var i = 0; i < cards.length; i ++)
+	{
+		$('#field-display').prepend("<img src='cards_png/" + cards[i].card + ".png'>");
+	}
 }
 
 //shows all the cards in the players hand in stacked fashion; after each call this function adjusts the location of the field display

@@ -12,10 +12,22 @@ html, body {
 	margin-bottom: 0;
 }
 
-.modal-body {
+#smaller-modal {
 	width: 300px;
 }
 
+#manual-body {
+	height: 500px;
+	overflow-y: scroll;
+}
+#manual-body img {
+	height: 70px;
+	width: auto;
+}
+#manual-body img.normal {
+	height: 96px;
+	width: 71px;
+}
 .some-container {
 	height: 90%;
 }
@@ -25,6 +37,7 @@ html, body {
 	height: 100%;
 	min-height: 100%;
 }
+
 #gameboard
 {
 	right: 5px;
@@ -49,6 +62,10 @@ html, body {
 		margin-top: 10px;
 		overflow-x: hidden;
 		overflow-y: hidden;
+	}
+	#clear-logs
+	{
+		margin-top: 8px;
 	}
 #log
 {

@@ -17,7 +17,7 @@
 			<button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
 			<h4 class="modal-title" id="myModalLabel">Profile Settings</h4>
 		  </div>
-		  <div class="modal-body">
+		  <div id="smaller-modal" class="modal-body">
 			<input id="pf-new-name" type="text" class="form-control" placeholder="New Name Here"/>
 			<hr>
 			<p>Are you awesome?</p>
@@ -31,6 +31,72 @@
 		</div>
 	  </div>
 	</div>
+	
+	<div class="modal fade" id="introduction-game-rules" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+	  <div class="modal-dialog">
+		<div class="modal-content">
+		  <div class="modal-header">
+			<button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+			<h3 class="modal-title" id="myModalLabel">Manual</h3>
+		  </div>
+		  <div id="manual-body" class="modal-body">
+			  <img class="normal" src="cards_png/s5.png"></img>
+			  <img class="normal" src="cards_png/s10.png"></img>
+			  <img class="normal" src="cards_png/sk.png"></img>
+			  <br/>
+			  <br/>
+			<p>Hi, welcome to Five Ten King. If this is your first time here, please give yourself a name by clicking on the top right drop down menu.</p>
+			<hr>
+			<p>You can always <strong>reopen this manual</strong> by clicking on <button type="button" class="btn btn-default">Manual</button>.</p>
+			<p>To <strong>play</strong>, click <button type="button" class="btn btn-default">Ready</button> in the top bar to begin matchmaking.</p>
+			<p>You can always <strong>quit</strong> matchmaking or your current game by clicking <button type="button" class="btn btn-default">Quit</button>.</p>
+			<hr>
+			<h3>Rules:</h3>
+			<p>The first player who is dealt the <em>elusive</em> 3 of diamonds gets the first turn</p>
+			<img class="normal" src="cards_png/d3.png"></img>
+			<p>A player during their turn may play any of the viable card combinations listed below if no cards have been played at all. If someone else has already played some cards, then the player may only play card combinations that trumps the last play. If the player does not wish to play, then they can pass their turn. The trump rules and conditions are as follows.</p>
+			<hr>
+			<h4>Singles</h4>
+			<p><u>How to play</u>: any one card of any suit.</p>
+			<p><u>How to beat</u>: play another single that's <em>strictly bigger</em>. The order of cards from smallest to biggest is 3, 4, 5, 6, 7, 8, 9, 10, jack, queen, king, ace, 2, black joker, red joker.</p>
+			<p><img src="cards_png/h8.png"></img> is beaten by <img src="cards_png/d9.png"></img> or <img src="cards_png/jb.png"></img> but not <img src="cards_png/s8.png"></img> or <img src="cards_png/h7.png"></img></p>
+			<hr>
+			<h4>Doubles</h4>
+			<p><u>How to play</u>: two cards with the same number of any suit.</p>
+			<p><u>How to beat</u>: play another double that's strictly bigger.</p>
+			<p><img src="cards_png/dj.png"></img><img src="cards_png/cj.png"></img></p>
+			<hr>
+			<h4>Triples</h4>
+			<p><u>How to play</u>: three cards with the same number of any suit <em>plus zero, one or two of any card.</em></p>
+			<p><u>How to beat</u>: play another triple that's strictly bigger with any number of extra cards.</p>
+			<p><img src="cards_png/s1.png"></img><img src="cards_png/d1.png"></img><img src="cards_png/h1.png"></img><img src="cards_png/jr.png"></img><img src="cards_png/h4.png"></img> and <img src="cards_png/c5.png"></img><img src="cards_png/d5.png"></img><img src="cards_png/s5.png"></img><img src="cards_png/h8.png"></img> and <img src="cards_png/sk.png"></img><img src="cards_png/hk.png"></img><img src="cards_png/ck.png"></img> are all valid triple plays.<p/>
+			<hr>
+			<h4>Straights</h4>
+			<p><u>How to play</u>: a chain of singles, doubles, or triples with <strong>consecutive numbers</strong>. Single straights must be at least 5 cards long. Double straights and triple straights must be at least 2 doubles/triples long. Triple straights of length L can be played with up to any 2L cards. A straight may <em>start at 3</em> and may <em>end at up to Aces</em>. <strong>Two's and jokers cannot be used as a part of a straight unless they were extra cards for a triple straight</strong>.</p>
+			<p><u>How to beat</u>: play another straight of the same type that starts at a higher value.</p>
+			<p><img src="cards_png/d3.png"></img><img src="cards_png/s4.png"></img><img src="cards_png/s5.png"></img><img src="cards_png/h6.png"></img><img src="cards_png/c7.png"></img> is a single straight of length 5.<p>
+			<p><img src="cards_png/dk.png"></img><img src="cards_png/hk.png"></img><img src="cards_png/c1.png"></img><img src="cards_png/h1.png"></img> is a double straight of length 2.</p>
+			<p><img src="cards_png/h8.png"></img><img src="cards_png/d8.png"></img><img src="cards_png/c8.png"></img><img src="cards_png/s9.png"></img><img src="cards_png/h9.png"></img><img src="cards_png/c9.png"></img><img src="cards_png/c3.png"></img><img src="cards_png/h5.png"><img src="cards_png/d6.png">is a triple straight of length 3 and 3 extra cards (could have 4).</p>
+			<hr>
+			<h4>Five Ten King</h4>
+			<p>Name sake of the game! Five Ten Kings automatically <strong>trump ALL of the plays listed above</strong>.<p>
+			<p><u>How to play</u>: a single 5, a single 10, and a single king with any suit.</p>
+			<p><u>How to beat</u>: If the 3 Five Ten King cards are not of the same suit, then another Five Ten King with all 3 cards of the same suit will beat it. Same suit Five Ten Kings cannot trump eachother. Any Five Ten King play will be beaten by Quads (see below).</p>
+			<p><img src="cards_png/h5.png"><img src="cards_png/s10.png"><img src="cards_png/hk.png"> is a regular Five Ten King.</p>
+			<p><img src="cards_png/c5.png"><img src="cards_png/c10.png"><img src="cards_png/ck.png"> is a same-suit Five Ten King (beats above).</p>
+			<hr>
+			<h4>Quads</h4>
+			<p>The most powerful play available. Quads trump every possible play except themselves.</p>
+			<p><u>How to play</u>: four cards of the same number.</p>
+			<p><u>How to beat</u>: play a bigger quad</p>
+			<p><img src="cards_png/h8.png"><img src="cards_png/d8.png"><img src="cards_png/s8.png"><img src="cards_png/c8.png"></p>
+		  </div>
+		  <div class="modal-footer">
+			<button type="button" class="btn btn-default" data-dismiss="modal">Got it!</button>
+		  </div>
+		</div>
+	  </div>
+	</div>
   
     <nav class="navbar navbar-default" role="navigation">
 		<div class="container-fluid">
@@ -39,10 +105,15 @@
 			</div>
 	
 			<div class="navbar-form navbar-left">
+				<button id="view-rules" type="submit" class="btn btn-default">Manual</button>
 				<button id="player-is-ready" type="submit" class="btn btn-default">Ready</button>
+				<button id="player-quit-game" type="submit" class="btn btn-default">Quit</button>
 			</div>
 	
 			<ul class="nav navbar-nav navbar-right">
+				<li>
+					<button id="clear-logs" type="submit" class="btn btn-default">Clear Log</button>
+				</li>
 				<li class="dropdown">
 					<a href="#" class="dropdown-toggle" data-toggle="dropdown"><span id="player-dropdown">Dropdown</span><span class="caret"></span></a>
 					<ul class="dropdown-menu" role="menu">

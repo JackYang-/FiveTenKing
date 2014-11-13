@@ -48,6 +48,7 @@ var FiveTenKing = function (playersList, deckCount)
 	this.turnOwnerIP = "";
 	this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
 	this.lastPlayMaker = "";
+	this.latestPlayCards = [];
 	this.gameOver = false;
 	//playType is the 'type' of the new play (self explanatory)
 	//a play with a higher overrideFactor automatically trumps a play with lower overrideFactor (ie: five ten king will have a higher override factor than a triple)
@@ -68,6 +69,9 @@ var FiveTenKing = function (playersList, deckCount)
 	this.shuffleDeck();
 	this.dealCards();
 };
+FiveTenKing.prototype.endGame = function () {
+	this.gameOver = true;
+}
 FiveTenKing.prototype.hasCards = function (ip, cardsToPlay)
 {
 	var playerHand = this.playerAtIP[ip].hand;
@@ -152,9 +156,39 @@ FiveTenKing.prototype.goNextTurn = function (ip, type)
 	this.turnOwnerIP = newTurnOwnerIP;
 	if (type === 'passing')
 	{
-		this.alertMessageToAll(this.playerAtIP[ip].player.name + " has passed, now it's " + this.playerAtIP[newTurnOwnerIP].player.name + "'s turn");
+		this.alertMessageToAll(this.playerAtIP[ip].player.name + " has passed.");
 	}
+	this.alertMessageToAll("Now it's " + this.playerAtIP[newTurnOwnerIP].player.name + "'s turn.");
 	return true;
+}
+FiveTenKing.prototype.recoverSession = function (ip, newSocket)
+{
+	var recoveringPlayer = this.playerAtIP[ip];
+	recoveringPlayer.socket = newSocket;
+	console.log('Attempting to recover ' + recoveringPlayer.player.name + '(' + recoveringPlayer.player.ip + ').');
+	var hand = this.playerAtIP[ip].hand;
+	recoveringPlayer.socket.emit('ftk-recover-game-session');
+	console.log('Hand length: ' + hand.length);
+	for (var i = 0; i < hand.length; i ++)
+	{
+		console.log('Dealing card: ' + hand[i].card);
+		recoveringPlayer.socket.emit('ftk-dealt-card', hand[i]);
+	}
+	recoveringPlayer.socket.emit('ftk-dealing-finished');
+	
+	recoveringPlayer.socket.emit('log-message', 'It is currently ' + this.playerAtIP[this.turnOwnerIP].player.name + '\'s turn.');
+	if (this.lastPlayMaker)
+	{
+		console.log('Last play maker: ' + this.lastPlayMaker);
+		var latestPlay = this.latestPlayCards;
+		recoveringPlayer.socket.emit('ftk-latest-play', latestPlay);
+		recoveringPlayer.socket.emit('log-message', 'The last play was made by ' + this.playerAtIP[this.lastPlayMaker].player.name + '.');
+	}
+	else
+	{
+		console.log('No plays on the field at the moment.');
+		recoveringPlayer.socket.emit('ftk-clear-display');
+	}
 }
 FiveTenKing.prototype.clearDisplayToAll = function ()
 {
@@ -165,16 +199,21 @@ FiveTenKing.prototype.clearDisplayToAll = function ()
 }
 FiveTenKing.prototype.alertMessageToAll = function (message)
 {
+
 	if (message)
 	{
 		for (var i = 0; i < this.players.length; i ++)
 		{
-			this.players[i].socket.emit('log-message', message);
+			if (this.players[i].player.ingame)
+			{
+				this.players[i].socket.emit('log-message', message);
+			}
 		}
 	}
 }
 FiveTenKing.prototype.alertPlayToAll = function (cardsToPlay)
 {
+	this.latestPlayCards = cardsToPlay;
 	for (var i = 0; i < this.players.length; i ++)
 	{
 		this.players[i].socket.emit('ftk-latest-play', cardsToPlay);
@@ -213,7 +252,7 @@ FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)
 					this.playerAtIP[ip].socket.emit('log-message', 'An error occurred while processing your play.');
 					return false;
 				}
-				this.alertMessageToAll(this.playerAtIP[ip].player.name + " just made a play.");
+				this.alertMessageToAll(this.playerAtIP[ip].player.name + " just made a play. They now have " + this.playerAtIP[ip].hand.length + " cards left in their hand.");
 				if (this.playerAtIP[ip].hand.length <= 0)
 				{
 					this.alertMessageToAll(this.playerAtIP[ip].player.name + " has won! Congratulations.");
@@ -477,6 +516,7 @@ FiveTenKing.prototype.calculateComplexPlay = function (cardMap, checkTwosAndJoke
 			//console.log("triple 2 detected");
 			returnObject.type = this.playTypes.TripleStraight;
 			returnObject.strength = 12;
+			returnObject.length = 1;
 			return returnObject;
 		}
 		else if (possiblePlays.length > 0)

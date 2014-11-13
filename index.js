@@ -69,23 +69,50 @@ io.on('connection', function(socket){
 		if (!playerSearchResult.connected)
 		{
 			playerSearchResult.connected = true;
+			playerSearchResult.ingame = false;
+			playerSearchResult.inqueue = false;
 			console.log(playerSearchResult.name + '(' + playerIP + ')' + ' has connected');
 			socket.emit('set-name', playerSearchResult.name);
 			socket.emit('log-message', 'Welcome back, ' + playerSearchResult.name + '.');
 			socket.emit('log-message', 'Currently, ' + getOnlinePlayersCount() + ' player(s) are online');
+			for (var i = 0; i < playerQueue.length; i ++)
+			{
+				if (playerQueue[i].player.ip === playerIP)
+				{
+					playerSearchResult.inqueue = true;
+					break;
+				}
+			}
+			if (!playerSearchResult.inqueue)
+			{
+				if (playerGameMap[playerIP])
+				{
+					console.log('Attempting to recover ' + playerSearchResult.name + '(' + playerIP + ').');
+					socket.emit('log-message', 'Attempting to recover your last game session.');
+					playerGameMap[playerIP].recoverSession(playerIP, socket);
+					playerGameMap[playerIP].alertMessageToAll(playerSearchResult.name + ' has returned!');
+					playerSearchResult.ingame = true;
+				}
+			}
 		}
 	}
 	else //if player is not registered, then it's a new player
 	{
 		players.push({name: "UnamedPlayer", ip:playerIP, connected:true});
 		console.log('a new player connected from ' + playerIP);
-		socket.emit('set-name', 'Click me! <span class="caret"></a>');
-		socket.emit('log-message', 'Hi there! To get started, give yourself a new name by editing your profile information in the top right dropdown. If this is your first time, please refer to the rule book (coming soon TM) in the top bar.');
+		socket.emit('set-name', 'Click me!');
+		socket.emit('log-message', 'Hi there! To get started, give yourself a new name by editing your profile information in the top right dropdown. If you need help, please click on the manual to see the game rules.');
+		socket.emit('first-visit');
 	}
 	
 	socket.on('ftk-move', function (command, data, callback) {
 		console.log('-------------------------------------------------------------------------------');
 		console.log('Five Ten King command initiated from ' + playerSearchResult.name + '(' + playerIP + ').');
+		if (!playerGameMap[playerIP])
+		{
+			socket.emit('log-message', 'Your game instance has expired or has become unavailable. Please refresh your page to look for a new game');
+			return false;
+		}
 		var result = playerGameMap[playerIP].handleCommand(playerIP, command, data);
 		if (!(result === true || result === false))
 		{
@@ -94,7 +121,48 @@ io.on('connection', function(socket){
 		callback(result);
 		console.log('-------------------------------------------------------------------------------');
 	});
-	
+	socket.on('player-quit-game', function () {
+		if (!(playerSearchResult.ingame || playerSearchResult.inqueue))
+		{
+			socket.emit('log-message', 'You are not currently in a game or queue.');
+			return;
+		}
+		else
+		{
+			if (playerSearchResult.inqueue)
+			{
+				for (var i = 0; i < playerQueue.length; i ++)
+				{
+					if (playerQueue[i].player.ip === playerIP)
+					{
+						playerQueue.splice(i, 1);
+					}
+				}
+				playerSearchResult.inqueue = false;
+				console.log(playerSearchResult.name + '(' + playerIP + ') has stopped queuing');
+				socket.emit('log-message', 'Stopped searching for opponents.');
+				return;
+			}
+			if (playerSearchResult.ingame)
+			{
+				var gameInstanceInProgress = playerGameMap[playerIP];
+				playerSearchResult.ingame = false;
+				if (gameInstanceInProgress)
+				{
+					gameInstanceInProgress.alertMessageToAll(playerSearchResult.name + ' has quit. Please click the \'Quit\' button to search for a new game.');
+					gameInstanceInProgress.endGame();
+					delete playerGameMap[playerIP];
+					console.log(playerSearchResult.name + '(' + playerIP + ') has quit their game.');
+					return;
+				}
+				else
+				{
+					socket.emit('log-message', 'Your game instance is unavailable or has expired. If you see this message then it\'s *probably* a bug. Please message help desk with your concerns. Kappa');
+					return;
+				}
+			}
+		}
+	});
 	socket.on('player-is-ready', function () {
 		console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") requests to play a new game.");
 		if (playerSearchResult.inqueue)
@@ -136,9 +204,29 @@ io.on('connection', function(socket){
 		playerSearchResult.ingame = false;
 		playerSearchResult.inqueue = false;
 		console.log('the player ' + playerSearchResult.name + '(' + playerIP + ') has disconnected');
+		if (playerGameMap[playerIP])
+		{
+			playerGameMap[playerIP].alertMessageToAll(playerSearchResult.name + " has just disconnected. Please wait for their return.");
+		}
 	});
 	socket.on('set-new-name', function(newName) {
 		console.log(playerIP + ' namechange: from ' + playerSearchResult.name + ' to ' + newName);
+		if (!newName)
+		{
+			console.log('name change was messed up');
+			socket.emit('log-message', 'Name change failed.');
+			return;
+		}
+		for (var i = 0; i < newName.length; i ++)
+		{
+			var c = newName.charAt(i);
+			if (!((c >= 65 && c <= 90) || (c >= 97) && (code <= 122)))
+			{
+				console.log('name has bad characters');
+				socket.emit('log-message', 'Name change failed. Please include only letters in your name.');
+				return;
+			}
+		}
 		if (newName === "UnamedPlayer" || newName === "")
 		{
 			console.log('trying to change name to unamed');

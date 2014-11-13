@@ -4,7 +4,7 @@ var cardsInHand = [];
 $(document).ready(function () {
 
 	$('#button-area').hide();
-
+	
 	//accept log messages; will drop scrollbar to bottom every time a new message is received
 	socket.on('log-message', function(msg){
 		logMessage(msg);
@@ -17,21 +17,34 @@ $(document).ready(function () {
 	
 	//when a card is dealt, add it to the hand
 	socket.on('ftk-dealt-card', function(card) {
+		console.log('Card is being dealt.');
 		cardsInHand.push(card);
 	});
 	
 	//when dealing is finished, initialize game-area
 	socket.on('ftk-dealing-finished', function () {
+		console.log('Dealing finished.');
 		$('#button-area').show();
 		displayHand();
 	});
 	
 	socket.on('ftk-latest-play', function (cards) {
+		console.log('Setting latest play.');
 		displayToField(cards);
+	});
+	
+	socket.on('ftk-recover-game-session', function () {
+		console.log('Recovering game session.');
+		cardsInHand = [];
+		$('#player-is-ready').attr('disabled', 'disabled');
 	});
 
 	socket.on('ftk-clear-display', function () {
 		$('#field-display').empty();
+	});
+	
+	socket.on('first-visit', function () {
+		$('#introduction-game-rules').modal('toggle');
 	});
 	
 	//this is the button click that saves user profile information
@@ -41,11 +54,26 @@ $(document).ready(function () {
 		$('#myModal').modal('toggle');
 	});
 	
+	$('#view-rules').click(function () {
+		$('#introduction-game-rules').modal('toggle');
+	});
+	
 	//button click that lets user enter a queue
 	$('#player-is-ready').click(function() {
 		cardsInHand = [];
 		$('#player-is-ready').attr('disabled', 'disabled');
 		socket.emit('player-is-ready');
+	});
+	
+	$('#player-quit-game').click(function () {
+		socket.emit('player-quit-game');
+		$('#player-is-ready').removeAttr('disabled');
+		$('#cardholder').empty();
+		$('#field-display').empty();
+	});
+	
+	$('#clear-logs').click(function () {
+		$('#messages').empty();
 	});
 	
 	//button click that lets user play the selected cards in hand

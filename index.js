@@ -220,7 +220,7 @@ io.on('connection', function(socket){
 		for (var i = 0; i < newName.length; i ++)
 		{
 			var c = newName.charAt(i);
-			if (!((c >= 65 && c <= 90) || (c >= 97) && (code <= 122)))
+			if (!((c >= 65 && c <= 90) || (c >= 97) && (c <= 122)))
 			{
 				console.log('name has bad characters');
 				socket.emit('log-message', 'Name change failed. Please include only letters in your name.');

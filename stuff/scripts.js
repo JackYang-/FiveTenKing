@@ -47,6 +47,25 @@ $(document).ready(function () {
 		$('#introduction-game-rules').modal('toggle');
 	});
 	
+	socket.on('desktop-notification', function (msg) {
+		if (!Notification) {
+			alert('Please use a modern version of your browser.');
+			return;
+		}
+		if (Notification.permission === "granted")
+		{
+			var notification = new Notification('Five Ten King', {
+				//icon: 'http://cdn.sstatic.net/stackexchange/img/logos/so/so-icon.png',
+				icon: 'cards_png/sk.png',
+				body: msg,
+			});
+			notification.onclick = function () {
+				window.focus();
+			}
+		}
+		
+	});
+	
 	//this is the button click that saves user profile information
 	$('#pf-save-button').click(function () {
 		var newName = $('#pf-new-name').val();
@@ -84,6 +103,39 @@ $(document).ready(function () {
 	//button click for pass
 	$('#ftk-pass').click(function () {
 		passTurn();
+	});
+	
+	$('#chat-box').keypress(function (e) {
+		if (e.which == 13)
+		{
+			$('#chat-form').submit();
+			e.preventDefault();
+		}
+	});
+	
+	$('#chat-form').submit(function () {
+		var text = $('#chat-box').val();
+		//alert(text);
+		socket.emit('chat-message', text);
+		$('#chat-box').val('');
+		return false;
+	});
+	
+	$('#enable-notifications').click(function () {
+		if (!Notification) {
+			alert('Please use a modern version of your browser.');
+			return;
+		  }
+
+		if (Notification.permission !== "granted") {
+			//alert("No notification permissions");
+			Notification.requestPermission();
+		}
+		else
+		{
+			//alert("Notification permissions granted.");
+		}
+		return;
 	});
 });
 
@@ -208,7 +260,7 @@ function setFieldDisplay(lineNumber)
 function logMessage (message)
 {
 	$('#messages').append($('<li>').text(message));
-	var messageBox = document.getElementById("log");
+	var messageBox = document.getElementById("message-holder");
 	messageBox.scrollTop = messageBox.scrollHeight;
 }
 })();

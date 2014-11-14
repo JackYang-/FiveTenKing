@@ -159,6 +159,7 @@ FiveTenKing.prototype.goNextTurn = function (ip, type)
 		this.alertMessageToAll(this.playerAtIP[ip].player.name + " has passed.");
 	}
 	this.alertMessageToAll("Now it's " + this.playerAtIP[newTurnOwnerIP].player.name + "'s turn.");
+	this.sendDesktopNotification(newTurnOwnerIP, 'Hey, it\'s your turn!');
 	return true;
 }
 FiveTenKing.prototype.recoverSession = function (ip, newSocket)
@@ -217,6 +218,13 @@ FiveTenKing.prototype.alertPlayToAll = function (cardsToPlay)
 	for (var i = 0; i < this.players.length; i ++)
 	{
 		this.players[i].socket.emit('ftk-latest-play', cardsToPlay);
+	}
+}
+FiveTenKing.prototype.sendDesktopNotification = function (ip, message)
+{
+	if (message)
+	{
+		this.playerAtIP[ip].socket.emit('desktop-notification', message);
 	}
 }
 FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)

@@ -105,6 +105,10 @@ io.on('connection', function(socket){
 		socket.emit('first-visit');
 	}
 	
+	socket.on('chat-message', function (msg) {
+		io.emit('log-message', playerSearchResult.name + ": " + msg);
+	});
+	
 	socket.on('ftk-move', function (command, data, callback) {
 		console.log('-------------------------------------------------------------------------------');
 		console.log('Five Ten King command initiated from ' + playerSearchResult.name + '(' + playerIP + ').');

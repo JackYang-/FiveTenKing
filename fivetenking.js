@@ -1,5 +1,5 @@
 (function () {
-var FiveTenKing = function (playersList, deckCount) 
+var FiveTenKing = function (playersList, deckCount, httpRequestMaker) 
 {
 	if (playersList.length <= 0 || deckCount <= 0)
 	{
@@ -27,6 +27,8 @@ var FiveTenKing = function (playersList, deckCount)
 			nextPlayerMap[currentIP] = playersList[0];
 		}
 	}
+	this.httpRequest = httpRequestMaker;
+	this.hasFirstWinner = false;
 	this.players = playersList; //[{player: player, socket: socket, hand: [{card: 'd3', suit='d', value=0}]}]
 	this.allPlayersString = playersInRoom;
 	this.playerAtIP = playerIPMap; //{ "ip": an element of playerlist ^ }
@@ -48,6 +50,8 @@ var FiveTenKing = function (playersList, deckCount)
 	this.turnOwnerIP = "";
 	this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
 	this.lastPlayMaker = "";
+	this.turnOwnerNotificationCount = 0;
+	this.turnOwnerNotifier = "";
 	this.latestPlayCards = [];
 	this.gameOver = false;
 	//playType is the 'type' of the new play (self explanatory)
@@ -68,8 +72,11 @@ var FiveTenKing = function (playersList, deckCount)
 	
 	this.shuffleDeck();
 	this.dealCards();
+	this.notifyUntilMoveOrPass(this.turnOwnerIP);
 };
-FiveTenKing.prototype.endGame = function () {
+FiveTenKing.prototype.endGame = function (ip) {
+	console.log("The player " + this.playerAtIP[ip].player.name + "(" + ip + ") has quit the game. If the game is already over, then nothing else will happen. Otherwise, this game is now over.");
+	this.alertMessageToAll(this.playerAtIP[ip].player.name + " has quit the game. It is now safe to leave. Use the Quit button to exit this lobby and the Ready button to look for a new game.");
 	this.gameOver = true;
 }
 FiveTenKing.prototype.hasCards = function (ip, cardsToPlay)
@@ -126,41 +133,94 @@ FiveTenKing.prototype.goNextTurn = function (ip, type)
 		type = 'passing';
 	}
 	console.log("goNextTurn called by " + ip + "; type: " + type);
+	
+	if (this.turnOwnerNotifier)
+	{
+		clearTimeout(this.turnOwnerNotifier);
+	}	
 	if (!(this.turnOwnerIP === ip))
 	{
-		this.playerAtIP[ip].socket.emit('log-message', 'Cannot pass because it is not currently your turn to play.');
+		this.playerAtIP[ip].socket.emit('error-message', 'Cannot pass because it is not currently your turn to play.');
 		return false;
 	}
-	if (type === 'passing' && this.lastPlayMaker === "")
+	if (type === 'passing' && this.lastPlayMaker === "" && !(this.turnOwnerNotificationCount >= 3))
 	{
-		this.playerAtIP[ip].socket.emit('log-message', 'Cannot pass on your own turn if there is no play to pass on.');
+		this.playerAtIP[ip].socket.emit('error-message', 'Cannot pass on your own turn if there is no play to pass on.');
 		return false;
+	}
+	
+	var allCardsPlayed = true;
+	for (var i = 0; i < this.players.length; i ++)
+	{
+		if (!(this.players[i].hand.length === 0))
+		{
+			console.log("Not all cards have been played, game will continue.");
+			allCardsPlayed = false;
+		}
+	}
+	if (allCardsPlayed)
+	{
+		console.log("No more cards left, game will end.");
+		this.alertMessageToAll("The game is over! Use the Quit button to exit this lobby and the Ready button to find a new game.", "success");
+		this.gameOver = allCardsPlayed;
+		return true;
 	}
 	
 	var newTurnOwnerIP = this.playerAfterIP[ip].player.ip;
 	console.log("next player ip: " + newTurnOwnerIP);
-	if (newTurnOwnerIP === this.turnOwnerIP)
+	if (!this.gameOver)
 	{
-		console.log("warning: the player after the current player is the current player himself; not a bug if only 1 player is in game");
-		this.lastPlayMaker = "";
-		this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
-		this.clearDisplayToAll();
+		var numTimesSkipped = 0;
+		if (newTurnOwnerIP === this.lastPlayMaker) //wipe cards in play if new turn owner is playing on top of his last play
+		{
+			console.log("everyone passed on " + this.lastPlayMaker + "'s play, so now it's his turn again");
+			this.lastPlayMaker = "";
+			this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
+			this.clearDisplayToAll();
+		}
+		
+		while (this.playerAtIP[newTurnOwnerIP].hand.length === 0) //if the new turn is for a player who has won, then their turn is skipped
+		{
+			console.log(this.playerAtIP[newTurnOwnerIP].player.name + "(" + newTurnOwnerIP + ") has already finished playing their hand. So their turn will be skipped");
+			newTurnOwnerIP = this.playerAfterIP[newTurnOwnerIP].player.ip;
+			if (newTurnOwnerIP === this.lastPlayMaker) //wipe cards in play if new turn owner is playing on top of his last play
+			{
+				console.log("everyone passed on " + this.lastPlayMaker + "'s play, so now it's his turn again");
+				this.lastPlayMaker = "";
+				this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
+				this.clearDisplayToAll();
+			}
+			numTimesSkipped ++;
+			if (numTimesSkipped > this.players.length)
+			{
+				console.log('THIS IS PROBABLY A BUG: all players have finished playing the but the game isnt yet over.');
+				break;
+			}
+		}
+		if (newTurnOwnerIP === this.turnOwnerIP) //this will log a warning if new turn owner is the same as current turn owner
+		{
+			console.log("warning: the player after the current player is the current player himself; not a bug if only 1 player is in game");
+			this.lastPlayMaker = "";
+			this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
+			this.clearDisplayToAll();
+		}
+		this.turnOwnerIP = newTurnOwnerIP;
+		if (type === 'passing')
+		{
+			this.alertMessageToAll(this.playerAtIP[ip].player.name + " has passed.", "normal");
+		}
+		
+		this.alertMessageToAll("Now it's " + this.playerAtIP[newTurnOwnerIP].player.name + "'s turn.", "normal");
+		this.sendDesktopNotification(newTurnOwnerIP, 'Hey, it\'s your turn!');
+		this.turnOwnerNotificationCount = 0;
+		this.notifyUntilMoveOrPass(newTurnOwnerIP);
+		
+		return true;
 	}
-	if (newTurnOwnerIP === this.lastPlayMaker)
+	else 
 	{
-		console.log("everyone passed on " + this.lastPlayMaker + "'s play, so now it's his turn again");
-		this.lastPlayMaker = "";
-		this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
-		this.clearDisplayToAll();
+		return false;
 	}
-	this.turnOwnerIP = newTurnOwnerIP;
-	if (type === 'passing')
-	{
-		this.alertMessageToAll(this.playerAtIP[ip].player.name + " has passed.");
-	}
-	this.alertMessageToAll("Now it's " + this.playerAtIP[newTurnOwnerIP].player.name + "'s turn.");
-	this.sendDesktopNotification(newTurnOwnerIP, 'Hey, it\'s your turn!');
-	return true;
 }
 FiveTenKing.prototype.recoverSession = function (ip, newSocket)
 {
@@ -198,30 +258,94 @@ FiveTenKing.prototype.clearDisplayToAll = function ()
 		this.players[i].socket.emit('ftk-clear-display');
 	}
 }
-FiveTenKing.prototype.alertMessageToAll = function (message)
+FiveTenKing.prototype.alertMessageToAll = function (message, type)
 {
-
+	if (this.gameOver)
+	{
+		console.log("The alert message [" + message = "] has been blocked because the game is now over.");
+		return;
+	}
+	var socketMsg = 'log-message';
+	if (!type)
+	{
+		return;
+	}
+	else if (type === "normal")
+	{
+		socketMsg = 'log-message';
+	}
+	else if (type === "warning")
+	{
+		socketMsg = 'warning-message';
+	}
+	else if (type === "error")
+	{
+		socketMsg = 'error-message';
+	}
+	else if (type === "success")
+	{
+		socketMsg = 'success-message';
+	}
 	if (message)
 	{
 		for (var i = 0; i < this.players.length; i ++)
 		{
 			if (this.players[i].player.ingame)
 			{
-				this.players[i].socket.emit('log-message', message);
+				this.players[i].socket.emit(socketMsg, message);
 			}
 		}
 	}
 }
 FiveTenKing.prototype.alertPlayToAll = function (cardsToPlay)
 {
+	if (this.gameOver)
+	{
+		console.log("A play was sent, but the game is over.");
+		return;
+	}
 	this.latestPlayCards = cardsToPlay;
 	for (var i = 0; i < this.players.length; i ++)
 	{
 		this.players[i].socket.emit('ftk-latest-play', cardsToPlay);
 	}
 }
+FiveTenKing.prototype.notifyUntilMoveOrPass = function (ip)
+{
+	if (this.gameOver)
+	{
+		console.log("Trying to nofity someone until move or pass, but the game is over.");
+		return;
+	}
+	var $this = this;
+	//var playerToNotify = this.playerAtIP[ip];
+	this.turnOwnerNotifier = setTimeout(function () {
+		if ($this.gameOver)
+		{
+			return;
+		}
+		console.log("Reminding " + $this.playerAtIP[ip].player.name + "(" + ip + ") to make a move.");
+		$this.sendDesktopNotification(ip, 'You might want to make a move soon, or your turn will be skipped!');
+		$this.turnOwnerNotificationCount ++;
+		if ($this.turnOwnerNotificationCount >= 3)
+		{
+			console.log($this.playerAtIP[ip].player.name + "(" + ip + ") has been idle for too long; their turn will be skipped.");
+			$this.goNextTurn(ip, 'passing');
+			return;
+		}
+		else
+		{
+			$this.notifyUntilMoveOrPass(ip);
+		}
+	}, 10000);
+}
 FiveTenKing.prototype.sendDesktopNotification = function (ip, message)
 {
+	if (this.gameOver)
+	{
+		console.log("Blocked notification with message [" + message + "] from being sent because the game is over.");
+		return;
+	}
 	if (message)
 	{
 		this.playerAtIP[ip].socket.emit('desktop-notification', message);
@@ -235,7 +359,7 @@ FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)
 		if (!(this.hasCards(ip, cardsToPlay)))
 		{
 			console.log('Turn owner\'s proposed play did not match with hand');
-			this.playerAtIP[ip].socket.emit('log-message', 'You are trying to make a play with cards you don\'t have!');
+			this.playerAtIP[ip].socket.emit('error-message', 'You are trying to make a play with cards you don\'t have!');
 			return false;
 		}
 		console.log('Turn owner\'s proposed play matched with hand.');
@@ -257,14 +381,40 @@ FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)
 				if (!(numRemovedCards === cardsToPlay.length))
 				{
 					console.log("an error occurred while removing cards from player's hand; " + numRemovedCards + " were removed but " + cardsToPlay.length + " cards were played");
-					this.playerAtIP[ip].socket.emit('log-message', 'An error occurred while processing your play.');
+					this.playerAtIP[ip].socket.emit('error-message', 'An error occurred while processing your play.');
 					return false;
 				}
-				this.alertMessageToAll(this.playerAtIP[ip].player.name + " just made a play. They now have " + this.playerAtIP[ip].hand.length + " cards left in their hand.");
+				console.log(this.playerAtIP[ip].player.name + "(" + ip + ") just finished making the play.");
+				this.alertMessageToAll(this.playerAtIP[ip].player.name + " just made a play. They now have " + this.playerAtIP[ip].hand.length + " cards left in their hand.", "warning");
 				if (this.playerAtIP[ip].hand.length <= 0)
 				{
-					this.alertMessageToAll(this.playerAtIP[ip].player.name + " has won! Congratulations.");
-					this.gameOver = true;
+					console.log("They won the game.");
+					this.alertMessageToAll(this.playerAtIP[ip].player.name + " has won! Congratulations.", "success");
+					if (!this.hasFirstWinner)
+					{
+						console.log("This is the first winner of this match. Preparing to send metapoints.");
+						this.hasFirstWinner = true;
+						var url = 'http://10.4.3.180:1338/integrations';
+						var headers = {
+							'metakey': 'SmFja3lQbGVhc2VkVGhlT3BE'
+						};
+						var form = { "ip": ip, "reason": "winning a game" };
+						this.httpRequest.post({ url: url, json: form, headers: headers }, 
+								function (err, response, body)
+								{
+									if (err)
+									{
+										console.log('request failed');
+									}
+									console.log('-------------------');
+									console.log("callback from metapoints received");
+									console.log('-------------------');
+								});						
+					}
+					else
+					{
+						console.log("This is not the first winner of this match. No metapoints awarded.");
+					}
 				}
 				this.alertPlayToAll(cardsToPlay);
 				
@@ -284,7 +434,8 @@ FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)
 	}
 	else
 	{
-		this.playerAtIP[ip].socket.emit('log-message', 'It is not currently your turn to play.');
+		console.log(this.playerAtIP[ip].player.name + "(" + ip + ") requested to play when it's not their turn. " + this.playerAtIP[this.turnOwnerIP] + "(" + this.turnOwnerIP + ") has the turn.");
+		this.playerAtIP[ip].socket.emit('error-message', 'It is not currently your turn to play.');
 		return false;
 	}
 }
@@ -313,7 +464,7 @@ FiveTenKing.prototype.handleCommand = function (ip, command, data)
 }
 FiveTenKing.prototype.dealCards = function ()
 {
-	this.alertMessageToAll("The following players are in the current room: " + this.allPlayersString);
+	this.alertMessageToAll("The following players are in the current room: " + this.allPlayersString, "warning");
 	var playerCounterMax = this.players.length - 1;
 	var playerCounter = 0;
 	

@@ -7,8 +7,21 @@ $(document).ready(function () {
 	
 	//accept log messages; will drop scrollbar to bottom every time a new message is received
 	socket.on('log-message', function(msg){
-		logMessage(msg);
+		logMessage(msg, "normal");
 	});	
+	socket.on('warning-message', function(msg) {
+		logMessage(msg, "warning");
+	});
+	socket.on('error-message', function(msg) {
+		logMessage(msg, "error");
+	});
+	socket.on('success-message', function(msg) {
+		logMessage(msg, "success");
+	});
+	
+	socket.on('chat-message', function(msg) {
+		chatMessage(msg);
+	});
 	
 	//called on name change success
 	socket.on('set-name', function(msg) {
@@ -48,22 +61,7 @@ $(document).ready(function () {
 	});
 	
 	socket.on('desktop-notification', function (msg) {
-		if (!Notification) {
-			alert('Please use a modern version of your browser.');
-			return;
-		}
-		if (Notification.permission === "granted")
-		{
-			var notification = new Notification('Five Ten King', {
-				//icon: 'http://cdn.sstatic.net/stackexchange/img/logos/so/so-icon.png',
-				icon: 'cards_png/sk.png',
-				body: msg,
-			});
-			notification.onclick = function () {
-				window.focus();
-			}
-		}
-		
+		sendNotification(msg);
 	});
 	
 	//this is the button click that saves user profile information
@@ -164,6 +162,28 @@ $(document).on('click', '.cardsReady', function (e) {
 	thisThing.addClass("cardsInHand");
 });
 
+function sendNotification (msg)
+{
+	if (!Notification) {
+			alert('Please use a modern version of your browser.');
+			return;
+	}
+	if (Notification.permission === "granted")
+	{
+		var notification = new Notification('Five Ten King', {
+			//icon: 'http://cdn.sstatic.net/stackexchange/img/logos/so/so-icon.png',
+			icon: 'cards_png/sk.png',
+			body: msg,
+		});
+		notification.onclick = function () {
+			window.focus();
+		}
+		setTimeout(function () {
+			notification.close();
+		}, 5000);
+	}
+}
+
 function passTurn()
 {
 	socket.emit('ftk-move', 'ftkcmd-pass-turn', 'pass-turn', function (approved) {
@@ -205,7 +225,7 @@ function playSelectedCards()
 		}
 		else
 		{
-			logMessage('Play rejected.');
+			logMessage('Play rejected.', 'error');
 		}
 	});
 }
@@ -257,10 +277,34 @@ function setFieldDisplay(lineNumber)
 	$('#field-display').css("top", lineNumber * 125 + 40);
 }
 
-function logMessage (message)
+function logMessage (message, type)
+{
+	var messageType = "";
+	if (type === "normal")
+	{
+		messageType = "alert-info normal-message";
+	}
+	else if (type === "warning")
+	{
+		messageType = "alert-warning warning-message";
+	}
+	else if (type === "error")
+	{
+		messageType = "alert-danger error-message";
+	}
+	else if (type === "success")
+	{
+		messageType = "alert-success success-message";
+	}
+	$('#messages').append($('<li class="alert ' + messageType + '"> role="alert"').text(message));
+	var messageBox = document.getElementById("message-holder");
+	messageBox.scrollTop = messageBox.scrollHeight;
+}
+})();
+
+function chatMessage (message)
 {
 	$('#messages').append($('<li>').text(message));
 	var messageBox = document.getElementById("message-holder");
 	messageBox.scrollTop = messageBox.scrollHeight;
 }
-})();

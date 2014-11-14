@@ -262,7 +262,7 @@ FiveTenKing.prototype.alertMessageToAll = function (message, type)
 {
 	if (this.gameOver)
 	{
-		console.log("The alert message [" + message = "] has been blocked because the game is now over.");
+		console.log("The alert message [" + message + "] has been blocked because the game is now over.");
 		return;
 	}
 	var socketMsg = 'log-message';

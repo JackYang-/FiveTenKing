@@ -339,6 +339,28 @@ FiveTenKing.prototype.notifyUntilMoveOrPass = function (ip)
 		}
 	}, 10000);
 }
+FiveTenKing.prototype.updateOthersToAll = function ()
+{
+	if (this.gameOver)
+	{
+		console.log("Blocking updates to the others cards field because game is over.");
+		return;
+	}
+	console.log("Attempting to updates the others cards field for all players.");
+	for (var i = 0; i < this.players.length; i ++)
+	{
+		var thisPlayer = this.players[i];
+		var handCountsForThisPlayer = [];
+		for (var j = 0; j < this.players.length; j ++)
+		{
+			if (!(this.players[j].player.ip === thisPlayer.player.ip))
+			{
+				handCountsForThisPlayer.push({name: this.players[j].player.name, numCards: this.players[j].hand.length});
+			}
+		}
+		thisPlayer.socket.emit('ftk-update-others', handCountsForThisPlayer);
+	}
+}
 FiveTenKing.prototype.sendDesktopNotification = function (ip, message)
 {
 	if (this.gameOver)
@@ -386,6 +408,7 @@ FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)
 				}
 				console.log(this.playerAtIP[ip].player.name + "(" + ip + ") just finished making the play.");
 				this.alertMessageToAll(this.playerAtIP[ip].player.name + " just made a play. They now have " + this.playerAtIP[ip].hand.length + " cards left in their hand.", "warning");
+				this.updateOthersToAll();
 				if (this.playerAtIP[ip].hand.length <= 0)
 				{
 					console.log("They won the game.");

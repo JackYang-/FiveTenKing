@@ -91,6 +91,7 @@ io.on('connection', function(socket){
 					socket.emit('log-message', 'Attempting to recover your last game session.');
 					playerGameMap[playerIP].recoverSession(playerIP, socket);
 					playerGameMap[playerIP].alertMessageToAll(playerSearchResult.name + ' has returned!', 'normal');
+					playerGameMap[playerIP].updateOthersToAll();
 					playerSearchResult.ingame = true;
 				}
 			}
@@ -98,9 +99,9 @@ io.on('connection', function(socket){
 	}
 	else //if player is not registered, then it's a new player
 	{
-		players.push({name: "UnamedPlayer", ip:playerIP, connected:true});
+		players.push({name: "NewPlayer", ip:playerIP, connected:true, ingame:false, inqueue:false});
 		console.log('a new player connected from ' + playerIP);
-		socket.emit('set-name', 'Click me!');
+		socket.emit('set-name', 'NewPlayer');
 		socket.emit('log-message', 'Hi there! To get started, give yourself a new name by editing your profile information in the top right dropdown. If you need help, please click on the manual to see the game rules.');
 		socket.emit('first-visit');
 	}
@@ -169,6 +170,12 @@ io.on('connection', function(socket){
 	});
 	socket.on('player-is-ready', function () {
 		console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") requests to play a new game.");
+		if (playerSearchResult.name === 'NewPlayer')
+		{
+			console.log("Player needs a new name before playing.");
+			socket.emit('error-message', 'Please give yourself a new name before starting a match.');
+			return;
+		}
 		if (playerSearchResult.inqueue)
 		{
 			console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") is already in queue.");
@@ -209,7 +216,7 @@ io.on('connection', function(socket){
 		console.log('the player ' + playerSearchResult.name + '(' + playerIP + ') has disconnected');
 		for (var i = 0; i < playerQueue.length; i ++)
 		{
-			if (playerQueue[i].ip === playerIP)
+			if (playerQueue[i].player.ip === playerIP)
 			{
 				playerQueue.splice(i, 1);
 			}
@@ -227,6 +234,11 @@ io.on('connection', function(socket){
 			socket.emit('error-message', 'Name change failed.');
 			return;
 		}
+		if (newName.length > 15)
+		{
+			console.log('name change had too many characters');
+			socket.emit('erro-message', 'Names can not be more than 15 characters long.');
+		}
 		for (var i = 0; i < newName.length; i ++)
 		{
 			var c = newName.charCodeAt(i);
@@ -237,7 +249,7 @@ io.on('connection', function(socket){
 				return;
 			}
 		}
-		if (newName === "UnamedPlayer" || newName === "")
+		if (newName === "NewPlayer" || newName === "")
 		{
 			console.log('trying to change name to unamed');
 			socket.emit('error-message', 'Come on bro.');
@@ -300,7 +312,7 @@ function setPlayerAttributes (ip, attribute, value)
 	{
 		if (players[i].ip === ip)
 		{
-			if (attribute === "name" && !(value ==="UnamedPlayer"))
+			if (attribute === "name" && !(value ==="NewPlayer"))
 			{
 				players[i].name = value;
 			}

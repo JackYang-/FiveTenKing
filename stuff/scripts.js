@@ -56,6 +56,10 @@ $(document).ready(function () {
 		$('#field-display').empty();
 	});
 	
+	socket.on('ftk-update-others', function (playersAndCards) {
+		displayOtherPlayersCards(playersAndCards);
+	});
+	
 	socket.on('first-visit', function () {
 		$('#introduction-game-rules').modal('toggle');
 	});
@@ -87,6 +91,7 @@ $(document).ready(function () {
 		$('#player-is-ready').removeAttr('disabled');
 		$('#cardholder').empty();
 		$('#field-display').empty();
+		$('#other-players').empty();
 	});
 	
 	$('#clear-logs').click(function () {
@@ -230,16 +235,17 @@ function playSelectedCards()
 	});
 }
 
-function displayToField(cards)
+function displayOtherPlayersCards(playerCardPairs)
 {
-	cards.sort(function (a, b) {
-		return a.value - b.value; //sort in ascending order because the display loop prepends all the cards so the cards get flipped
-	});
-	
-	$('#field-display').empty();
-	for (var i = 0; i < cards.length; i ++)
+	$('#other-players').empty();
+	for (var j = 0; j < playerCardPairs.length; j ++)
 	{
-		$('#field-display').prepend("<img src='cards_png/" + cards[i].card + ".png'>");
+		//alert(j + " " + playerCardPairs[j].name + " " + playerCardPairs[j].numCards);
+		$('#other-players').append("<div style='position:absolute;top:" + (j * 100) + "px'>" + playerCardPairs[j].name + ":</div>");
+		for (var i = 0; i < playerCardPairs[j].numCards; i ++)
+		{
+			$('#other-players').append("<img src='cards_png/b1fv.png' style='position:absolute;top:" + (j * 100 - 35) + "px;left:" + (i * 15 + 125) + "px;z-index:" + i + "'></img>");
+		}
 	}
 }
 
@@ -270,11 +276,26 @@ function displayHand()
 		}
 	}
 	setFieldDisplay(lineNum + 1);
+	//displayOtherPlayersCards([{name: "asdfgasdfgasdfg", numCards: cardsInHand.length}, {name:"rayanpls", numCards: 5}]);
 }
 
 function setFieldDisplay(lineNumber)
 {
 	$('#field-display').css("top", lineNumber * 125 + 40);
+	$('#other-players').css("top", lineNumber * 125 + 75);
+}
+
+function displayToField(cards)
+{
+	cards.sort(function (a, b) {
+		return a.value - b.value; //sort in ascending order because the display loop prepends all the cards so the cards get flipped
+	});
+	
+	$('#field-display').empty();
+	for (var i = 0; i < cards.length; i ++)
+	{
+		$('#field-display').prepend("<img src='cards_png/" + cards[i].card + ".png'>");
+	}
 }
 
 function logMessage (message, type)

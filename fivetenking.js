@@ -1,5 +1,5 @@
 (function () {
-var FiveTenKing = function (playersList, deckCount, httpRequestMaker) 
+var FiveTenKing = function (playersList, deckCount, extraData) 
 {
 	if (playersList.length <= 0 || deckCount <= 0)
 	{
@@ -27,7 +27,8 @@ var FiveTenKing = function (playersList, deckCount, httpRequestMaker)
 			nextPlayerMap[currentIP] = playersList[0];
 		}
 	}
-	this.httpRequest = httpRequestMaker;
+	this.httpRequest = extraData.httpRequestMaker;
+	this.metakey = extraData.metakey;
 	this.hasFirstWinner = false;
 	this.players = playersList; //[{player: player, socket: socket, hand: [{card: 'd3', suit='d', value=0}]}]
 	this.allPlayersString = playersInRoom;
@@ -415,28 +416,31 @@ FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)
 					this.alertMessageToAll(this.playerAtIP[ip].player.name + " has won! Congratulations.", "success");
 					if (!this.hasFirstWinner)
 					{
-						console.log("This is the first winner of this match. Preparing to send metapoints.");
+						console.log("This is the first winner of this match. Preparing to send metapoints if integration exists.");
 						this.hasFirstWinner = true;
-						var url = 'http://10.4.3.180:1338/integrations';
-						var headers = {
-							'metakey': 'SmFja3lQbGVhc2VkVGhlT3BE'
-						};
-						var form = { "ip": ip, "reason": "winning a game" };
-						this.httpRequest.post({ url: url, json: form, headers: headers }, 
-								function (err, response, body)
-								{
-									if (err)
+						if (this.metakey)
+						{
+							var url = 'http://10.4.3.180:1338/integrations';
+							var headers = {
+								'metakey': this.metakey
+							};
+							var form = { "ip": ip, "reason": "winning a game" };
+							this.httpRequest.post({ url: url, json: form, headers: headers }, 
+									function (err, response, body)
 									{
-										console.log('request failed');
-									}
-									console.log('-------------------');
-									console.log("callback from metapoints received");
-									console.log('-------------------');
-								});						
+										if (err)
+										{
+											console.log('request failed');
+										}
+										console.log('-------------------');
+										console.log("callback from metapoints received");
+										console.log('-------------------');
+									});		
+						}				
 					}
 					else
 					{
-						console.log("This is not the first winner of this match. No metapoints awarded.");
+						console.log("This is not the first winner of this match.");
 					}
 				}
 				this.alertPlayToAll(cardsToPlay);

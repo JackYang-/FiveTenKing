@@ -22,6 +22,7 @@ var _listenIP = settings.ip ? settings.ip : 'asdf';
 var _playersFile = settings.playersFilePath ? settings.playersFilePath : './registeredPlayers.json';
 var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 1;
 var _FTKQueueCap = settings.queueCap ? settings.queueCap : 2;
+var _metapointsIntegrationKey = settings.metakey ? settings.metakey : 'asdf';
 
 //loading players
 var currentUserData = require(_playersFile);
@@ -200,7 +201,8 @@ io.on('connection', function(socket){
 				playerQueue[i].socket.emit('success-message', 'Match found!');
 				playerList.push(playerQueue[i]);
 			}
-			var newGameInstance = new ftk.FiveTenKing(playerList, _numDecksForFTK, request);
+			var extraData = {httpRequestMaker: request, metakey: _metapointsIntegrationKey};
+			var newGameInstance = new ftk.FiveTenKing(playerList, _numDecksForFTK, extraData);
 			for (var i = 0; i < playerList.length; i ++) //need to keep track of the games that the players are in
 			{
 				playerGameMap[playerList[i].player.ip] = newGameInstance;

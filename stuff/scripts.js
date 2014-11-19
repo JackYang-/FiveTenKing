@@ -285,6 +285,7 @@ function setFieldDisplay(lineNumber)
 	$('#other-players').css("top", lineNumber * 125 + 75);
 }
 
+
 function displayToField(cards)
 {
 	cards.sort(function (a, b) {
@@ -296,6 +297,17 @@ function displayToField(cards)
 	{
 		$('#field-display').prepend("<img src='cards_png/" + cards[i].card + ".png'>");
 	}
+	
+	updateOtherPlayersLocation();
+}
+
+function updateOtherPlayersLocation()
+{
+	var gameboardWidth = document.getElementById("gameboard").offsetWidth;
+	var maxCardsPerLine = Math.floor((gameboardWidth - 30)/71);
+	var numLines = Math.ceil(gameboardWidth / maxCardsPerLine);
+	var currentTop = $('#other-players').css('top');
+	$('#other-players').css("top", (currentTop + (numLines * 95)));
 }
 
 function logMessage (message, type)

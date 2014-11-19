@@ -1,6 +1,11 @@
 (function () {
 var FiveTenKing = function (playersList, deckCount, extraData) 
 {
+	var FTKDealer = require("./components/FTKDealer.js");
+	var FTKPlayChecker = require("./components/FTKPlayChecker.js");
+	
+	//privatize this one
+	this.playChecker = new FTKPlayChecker.FTKPlayChecker();
 	if (playersList.length <= 0 || deckCount <= 0)
 	{
 		console.log("Error: initializing 50k with 0 or fewer players or decks" + playersList.length + " " + deckCount);
@@ -34,45 +39,23 @@ var FiveTenKing = function (playersList, deckCount, extraData)
 	this.allPlayersString = playersInRoom;
 	this.playerAtIP = playerIPMap; //{ "ip": an element of playerlist ^ }
 	this.playerAfterIP = nextPlayerMap; //{ "ip": next player's ip }
-	this.deckAssembleMapping = ["3", "4", "5", "6", "7", "8", "9", "10", "j", "q", "k", "1", "2"];
-	this.suitMapping = ["d", "s", "h", "c"];
-	this.dealersCards = []; //[{card: 'd3', value=0}]
-	this.playTypes = {
-		NoPlay: {name: "No Play", overrideFactor: 0},
-		Unknown: {name: "Unknown Play", overrideFactor: 0},
-		Single: {name: "Single", overrideFactor: 1},
-		SingleStraight: {name: "Single Straight", overrideFactor: 1},
-		DoubleStraight: {name: "Double Straight", overrideFactor: 1},
-		TripleStraight: {name: "Triple Straight", overrideFactor: 1},
-		FiveTenKing: {name: "Five Ten King", overrideFactor: 2},
-		FiveTenKingSameSuit: {name: "Same Suit Five Ten King", overrideFactor: 3},
-		Quad: {name: "Quad", overrideFactor: 4}
-	}
 	this.turnOwnerIP = "";
-	this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
+	//this.lastPlay = {type: this.playChecker.playTypes.NoPlay, strength: 0, length: 0};
+	this.lastPlay = this.playChecker.getNoPlay();
 	this.lastPlayMaker = "";
 	this.turnOwnerNotificationCount = 0;
 	this.turnOwnerNotifier = "";
 	this.latestPlayCards = [];
 	this.gameOver = false;
-	//playType is the 'type' of the new play (self explanatory)
-	//a play with a higher overrideFactor automatically trumps a play with lower overrideFactor (ie: five ten king will have a higher override factor than a triple)
-		//Single, Double, Triple and all straights have overrideFactor 1
-		//vanilla five ten kings have overrideFactor 2
-		//five ten kings with all 3 cards of the same suit has overrideFactor 3
-		//quads have overrideFactor 4
-	//if a play is made with the same overrideFactor as the lastPlay, then:
-		//if lastPlay's length is non-zero, it means lastPlay is some type of straight; newPlay's length must match the lastPlay's length
-		//newPlay's type.name must match lastPlay's type.name
-		//in all cases, newPlay's strength must be strictly greater than lastPlay's strength to trump it
 	
-	for (var i = 0; i < deckCount; i ++)
+	var dealer = new FTKDealer.FTKDealer(deckCount);
+	var firstTurnOwner = dealer.dealCards(this.players);
+	if (!firstTurnOwner)
 	{
-		this.assembleDeck();
+		console.log("ERROR: first turn owner not initialized.");
+		return;
 	}
-	
-	this.shuffleDeck();
-	this.dealCards();
+	this.turnOwnerIP = firstTurnOwner;
 	this.notifyUntilMoveOrPass(this.turnOwnerIP);
 };
 FiveTenKing.prototype.endGame = function (ip) {
@@ -176,7 +159,7 @@ FiveTenKing.prototype.goNextTurn = function (ip, type)
 		{
 			console.log("everyone passed on " + this.lastPlayMaker + "'s play, so now it's his turn again");
 			this.lastPlayMaker = "";
-			this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
+			this.lastPlay = this.playChecker.getNoPlay();//{type: this.playChecker.playTypes.NoPlay, strength: 0, length: 0};
 			this.clearDisplayToAll();
 		}
 		
@@ -188,7 +171,7 @@ FiveTenKing.prototype.goNextTurn = function (ip, type)
 			{
 				console.log("everyone passed on " + this.lastPlayMaker + "'s play, so now it's his turn again");
 				this.lastPlayMaker = "";
-				this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
+				this.lastPlay = this.playChecker.getNoPlay();//{type: this.playChecker.playTypes.NoPlay, strength: 0, length: 0};
 				this.clearDisplayToAll();
 			}
 			numTimesSkipped ++;
@@ -202,7 +185,7 @@ FiveTenKing.prototype.goNextTurn = function (ip, type)
 		{
 			console.log("warning: the player after the current player is the current player himself; not a bug if only 1 player is in game");
 			this.lastPlayMaker = "";
-			this.lastPlay = {type: this.playTypes.NoPlay, strength: 0, length: 0};
+			this.lastPlay = this.playChecker.getNoPlay();//{type: this.playChecker.playTypes.NoPlay, strength: 0, length: 0};
 			this.clearDisplayToAll();
 		}
 		this.turnOwnerIP = newTurnOwnerIP;
@@ -376,95 +359,81 @@ FiveTenKing.prototype.sendDesktopNotification = function (ip, message)
 }
 FiveTenKing.prototype.handlePlay = function (ip, cardsToPlay)
 {
-	if (this.turnOwnerIP === ip)
-	{
-		console.log('Incoming request is coming from the turn owner.');
-		if (!(this.hasCards(ip, cardsToPlay)))
-		{
-			console.log('Turn owner\'s proposed play did not match with hand');
-			this.playerAtIP[ip].socket.emit('error-message', 'You are trying to make a play with cards you don\'t have!');
-			return false;
-		}
-		console.log('Turn owner\'s proposed play matched with hand.');
-
-		var playResult = this.calculatePlay(cardsToPlay);
-		var trump = false;
-		if (!(playResult.type.name === this.playTypes.Unknown.name || playResult.type.name === this.playTypes.NoPlay.name))
-		{
-			if (playResult.type.overrideFactor > this.lastPlay.type.overrideFactor || //overrideFactor is greater OR:
-					(playResult.type.overrideFactor === this.lastPlay.type.overrideFactor //same override factor
-						&& playResult.type.name === this.lastPlay.type.name //same type
-						&& playResult.strength > this.lastPlay.strength //greater strength
-						&& playResult.length === this.lastPlay.length)) //same length
-			{
-				console.log("new " + playResult.type.name + " play trumps old play");
-				this.lastPlay = playResult;
-				this.lastPlayMaker = ip;
-				var numRemovedCards = this.removeCards(ip, cardsToPlay); //remove the played cards from player's hanad
-				if (!(numRemovedCards === cardsToPlay.length))
-				{
-					console.log("an error occurred while removing cards from player's hand; " + numRemovedCards + " were removed but " + cardsToPlay.length + " cards were played");
-					this.playerAtIP[ip].socket.emit('error-message', 'An error occurred while processing your play.');
-					return false;
-				}
-				console.log(this.playerAtIP[ip].player.name + "(" + ip + ") just finished making the play.");
-				this.alertMessageToAll(this.playerAtIP[ip].player.name + " just made a play. They now have " + this.playerAtIP[ip].hand.length + " cards left in their hand.", "warning");
-				this.updateOthersToAll();
-				if (this.playerAtIP[ip].hand.length <= 0)
-				{
-					console.log("They won the game.");
-					this.alertMessageToAll(this.playerAtIP[ip].player.name + " has won! Congratulations.", "success");
-					if (!this.hasFirstWinner)
-					{
-						console.log("This is the first winner of this match. Preparing to send metapoints if integration exists.");
-						this.hasFirstWinner = true;
-						if (this.metakey)
-						{
-							var url = 'http://10.4.3.180:1338/integrations';
-							var headers = {
-								'metakey': this.metakey
-							};
-							var form = { "ip": ip, "reason": "winning a game" };
-							this.httpRequest.post({ url: url, json: form, headers: headers }, 
-									function (err, response, body)
-									{
-										if (err)
-										{
-											console.log('request failed');
-										}
-										console.log('-------------------');
-										console.log("callback from metapoints received");
-										console.log('-------------------');
-									});		
-						}				
-					}
-					else
-					{
-						console.log("This is not the first winner of this match.");
-					}
-				}
-				this.alertPlayToAll(cardsToPlay);
-				
-				return this.goNextTurn(ip, 'finished-play');
-			}
-			else
-			{
-				console.log("new " + playResult.type.name + " play did not trump old play");
-				return false;
-			}
-		}
-		else
-		{
-			console.log("play failed to evaluate; type played: " + playResult.type.name);
-			return false;
-		}
-	}
-	else
+	if (!(this.turnOwnerIP === ip))
 	{
 		console.log(this.playerAtIP[ip].player.name + "(" + ip + ") requested to play when it's not their turn. " + this.playerAtIP[this.turnOwnerIP] + "(" + this.turnOwnerIP + ") has the turn.");
 		this.playerAtIP[ip].socket.emit('error-message', 'It is not currently your turn to play.');
 		return false;
 	}
+	console.log('Incoming request is coming from the turn owner.');
+	if (!(this.hasCards(ip, cardsToPlay)))
+	{
+		console.log('Turn owner\'s proposed play did not match with hand');
+		this.playerAtIP[ip].socket.emit('error-message', 'You are trying to make a play with cards you don\'t have!');
+		return false;
+	}
+	console.log('Turn owner\'s proposed play matched with hand.');
+
+	var playResult = this.playChecker.calculatePlay(cardsToPlay);
+	if (!(this.playChecker.isValidPlay(playResult)))
+	{
+		console.log("Play failed to evaluate.");
+		return false;
+	}
+	if (!(this.playChecker.firstTrumpsSecond(playResult, this.lastPlay)))
+	{
+		console.log("New play did not trump old play.");
+		return false;
+	}
+	console.log("new " + playResult.type.name + " play trumps old play");
+	this.lastPlay = playResult;
+	this.lastPlayMaker = ip;
+	var numRemovedCards = this.removeCards(ip, cardsToPlay); //remove the played cards from player's hanad
+	if (!(numRemovedCards === cardsToPlay.length))
+	{
+		console.log("an error occurred while removing cards from player's hand; " + numRemovedCards + " were removed but " + cardsToPlay.length + " cards were played");
+		this.playerAtIP[ip].socket.emit('error-message', 'An error occurred while processing your play.');
+		return false;
+	}
+	console.log(this.playerAtIP[ip].player.name + "(" + ip + ") just finished making the play.");
+	this.alertMessageToAll(this.playerAtIP[ip].player.name + " just made a play. They now have " + this.playerAtIP[ip].hand.length + " cards left in their hand.", "warning");
+	this.updateOthersToAll();
+	if (this.playerAtIP[ip].hand.length <= 0)
+	{
+		console.log("They won the game.");
+		this.alertMessageToAll(this.playerAtIP[ip].player.name + " has won! Congratulations.", "success");
+		if (!this.hasFirstWinner)
+		{
+			console.log("This is the first winner of this match. Preparing to send metapoints if integration exists.");
+			this.hasFirstWinner = true;
+			if (this.metakey)
+			{
+				var url = 'http://10.4.3.180:1338/integrations';
+				var headers = {
+					'metakey': this.metakey
+				};
+				var form = { "ip": ip, "reason": "winning a game" };
+				this.httpRequest.post({ url: url, json: form, headers: headers }, 
+						function (err, response, body)
+						{
+							if (err)
+							{
+								console.log('request failed');
+							}
+							console.log('-------------------');
+							console.log("callback from metapoints received");
+							console.log('-------------------');
+						});		
+			}				
+		}
+		else
+		{
+			console.log("This is not the first winner of this match.");
+		}
+	}
+	this.alertPlayToAll(cardsToPlay);
+	
+	return this.goNextTurn(ip, 'finished-play');
 }
 //TODO: data sanity checks and send a token to the client to prevent it from sending bad requests
 FiveTenKing.prototype.handleCommand = function (ip, command, data)
@@ -489,76 +458,7 @@ FiveTenKing.prototype.handleCommand = function (ip, command, data)
 			return false;
 	}
 }
-FiveTenKing.prototype.dealCards = function ()
-{
-	this.alertMessageToAll("The following players are in the current room: " + this.allPlayersString, "warning");
-	var playerCounterMax = this.players.length - 1;
-	var playerCounter = 0;
-	
-	while (this.dealersCards.length > 0)
-	{
-		var card = this.getNextCard();
-		this.players[playerCounter].hand.push(card);
-		if (card.card === 'd3' && !this.turnOwnerIP)
-		{
-			console.log('The first 3 of diamonds was dealt to ' + this.players[playerCounter].player.name + '(' + this.players[playerCounter].player.ip + ')');
-			this.turnOwnerIP = this.players[playerCounter].player.ip;
-			var firstTurnPlayerName = this.players[playerCounter].player.name;
-			for (var j = 0; j < this.players.length; j ++)
-			{
-				this.players[j].socket.emit('log-message', firstTurnPlayerName + ' has snatched the first turn by drawing the first 3 of diamonds.');
-			}
-		}
-		//console.log('Player ' + playerCounter + ' was dealt: ' + card.card);
-		this.players[playerCounter].socket.emit('ftk-dealt-card', card);
-		playerCounter ++;
-		if (playerCounter > playerCounterMax)
-		{
-			playerCounter = 0;
-		}
-	}
-	
-	for (var i = 0; i < this.players.length; i ++)
-	{
-		this.players[i].socket.emit('ftk-dealing-finished');
-	}
-}
-FiveTenKing.prototype.getNextCard = function () //NOTE: this function alters the length of the deck
-{
-	if (this.dealersCards.length > 0)
-	{
-		var card = this.dealersCards.splice(0, 1);
-		return card[0];
-	}
-	else
-	{
-		return false;
-	}
-}
-FiveTenKing.prototype.shuffleDeck = function ()
-{
-	for (var i = 0; i < this.dealersCards.length - 1; i ++)
-	{
-		var range = this.dealersCards.length - 1 - i;
-		var newIndex = Math.floor(Math.random() * range) + i + 1;
-		var temp = this.dealersCards[i];
-		this.dealersCards[i] = this.dealersCards[newIndex];
-		this.dealersCards[newIndex] = temp;
-	}
-}
-FiveTenKing.prototype.assembleDeck = function()
-{
-	for (var j = 0; j < this.deckAssembleMapping.length; j ++)
-	{
-		for (var k = 0; k < this.suitMapping.length; k ++)
-		{
-			this.dealersCards.push({card: this.suitMapping[k] + this.deckAssembleMapping[j], suit: this.suitMapping[k], value: j});
-		}
-	}
-	this.dealersCards.push({card: "jb", value: this.deckAssembleMapping.length});
-	this.dealersCards.push({card: "jr", value: (this.deckAssembleMapping.length + 1)});
-}
-FiveTenKing.prototype.calculatePlay = function (cardsToPlay)//returns an object of the form {type: int, strength: int, length: int}
+/*FiveTenKing.prototype.calculatePlay = function (cardsToPlay)//returns an object of the form {type: int, strength: int, length: int}
 {
 	if (cardsToPlay.length === 1) //checking for singles
 	{
@@ -1023,8 +923,8 @@ FiveTenKing.prototype.calculateComplexPlay = function (cardMap, checkTwosAndJoke
 				return possiblePlays;
 			}
 		}
-	}	
-}
+	}
+}*/
 module.exports.FiveTenKing = FiveTenKing;
 
 }());

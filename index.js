@@ -20,8 +20,8 @@ var settings = require("./settings.json");
 var _listenPort = settings.port ? settings.port : '3000';
 var _listenIP = settings.ip ? settings.ip : 'asdf';
 var _playersFile = settings.playersFilePath ? settings.playersFilePath : './registeredPlayers.json';
-var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 1;
-var _FTKQueueCap = settings.queueCap ? settings.queueCap : 2;
+var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 2;
+var _FTKQueueCap = 1;
 var _metapointsIntegrationKey = settings.metakey ? settings.metakey : 'asdf';
 
 //loading players
@@ -101,6 +101,7 @@ io.on('connection', function(socket){
 	else //if player is not registered, then it's a new player
 	{
 		players.push({name: "NewPlayer", ip:playerIP, connected:true, ingame:false, inqueue:false});
+		playerSearchResult = getPlayer(playerIP);
 		console.log('a new player connected from ' + playerIP);
 		socket.emit('set-name', 'NewPlayer');
 		socket.emit('log-message', 'Hi there! To get started, give yourself a new name by editing your profile information in the top right dropdown. If you need help, please click on the manual to see the game rules.');
@@ -171,6 +172,12 @@ io.on('connection', function(socket){
 	});
 	socket.on('player-is-ready', function () {
 		console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") requests to play a new game.");
+		if (!playerSearchResult.name)
+		{
+			console.log("Player name is screwed up");
+			socket.emit('error-message', 'Please give yourself a new name before starting a match.');
+			return;
+		}
 		if (playerSearchResult.name === 'NewPlayer')
 		{
 			console.log("Player needs a new name before playing.");
@@ -239,7 +246,8 @@ io.on('connection', function(socket){
 		if (newName.length > 15)
 		{
 			console.log('name change had too many characters');
-			socket.emit('erro-message', 'Names can not be more than 15 characters long.');
+			socket.emit('error-message', 'Names can not be more than 15 characters long.');
+			return;
 		}
 		for (var i = 0; i < newName.length; i ++)
 		{
@@ -266,17 +274,18 @@ io.on('connection', function(socket){
 			console.log('name is in use');
 			socket.emit('error-message', 'This name is already in use.');
 		}
-		else if (setPlayerAttributes(playerIP, "name", newName))
+		else// if (setPlayerAttributes(playerIP, "name", newName))
 		{
+			playerSearchResult.name = newName;
 			console.log('player name change succeeded');
 			socket.emit('set-name', escapeHtml(newName));
 			socket.emit('success-message', 'Name change successful.');
 		}
-		else
+		/*else
 		{
 			console.log('player name change failed');
 			socket.emit('error-message', 'An error occurred while changing your name.');
-		}
+		}*/
 		
 	});
 });
@@ -308,7 +317,7 @@ function playerAttributeExists(attribute, value)
 	return false;
 }
 
-function setPlayerAttributes (ip, attribute, value)
+/*function setPlayerAttributes (ip, attribute, value)
 {
 	for (var i in players)
 	{
@@ -326,7 +335,7 @@ function setPlayerAttributes (ip, attribute, value)
 		}
 	}
 	return false;
-}
+}*/
 
 function getOnlinePlayersCount()
 {

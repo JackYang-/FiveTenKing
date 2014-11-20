@@ -21,7 +21,7 @@ var _listenPort = settings.port ? settings.port : '3000';
 var _listenIP = settings.ip ? settings.ip : 'asdf';
 var _playersFile = settings.playersFilePath ? settings.playersFilePath : './registeredPlayers.json';
 var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 2;
-var _FTKQueueCap = 1;
+var _FTKQueueCap = settings.queueCap ? settings.queueCap : 3;
 var _metapointsIntegrationKey = settings.metakey ? settings.metakey : 'asdf';
 
 //loading players
@@ -205,15 +205,18 @@ io.on('connection', function(socket){
 			var playerList = [];
 			for (var i = 0; i < playerQueue.length; i ++) //message player for game found; assemble players for new game instance
 			{
-				playerQueue[i].socket.emit('success-message', 'Match found!');
+				//playerQueue[i].socket.emit('success-message', 'Match found!');
 				playerList.push(playerQueue[i]);
 			}
 			var extraData = {httpRequestMaker: request, metakey: _metapointsIntegrationKey};
 			var newGameInstance = new ftk.FiveTenKing(playerList, _numDecksForFTK, extraData);
+			var playersInGame = [];
 			for (var i = 0; i < playerList.length; i ++) //need to keep track of the games that the players are in
 			{
+				playersInGame.push(playerList[i].player.name);
 				playerGameMap[playerList[i].player.ip] = newGameInstance;
 			}
+			newGameInstance.alertMessageToAll('Match found! The players in the room are: ' + playersInGame.join() + '.');
 			playerQueue = [];
 		}
 	});

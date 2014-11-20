@@ -64,6 +64,8 @@ var FTKDealer = function (deckCount)
 	{
 		addNewDeckCopy();
 	}
+	//shuffle deck
+	shuffleDeck();
 	
 	//Summary: takes in an array of players and populate each element's hand field
 	//Note: this function will alter each element in the list by initializing a hand field as an empty array even if it doesn't exist

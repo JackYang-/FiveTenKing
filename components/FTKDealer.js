@@ -106,7 +106,7 @@ var FTKDealer = function (deckCount)
 			var card = getNextCard();
 			playersList[counter].hand.push(card);
 			
-			if (card.card === 'd3')
+			if (card.card === 'd3' && !firstTurnPlayer)
 			{
 				firstTurnPlayer = playersList[counter].player;
 				console.log("FTKDealer: First diamond of 3 was dealt to " + firstTurnPlayer.name + "(" + firstTurnPlayer.ip + ").");

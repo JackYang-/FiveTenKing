@@ -5,6 +5,8 @@ var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var ftk = require('./fivetenking.js');
 var request = require('request');
+var FTKUtil = require("./common/FTKUtil.js");
+var FTKMessenger = require("./common/FTKMessenger.js");
 
 app.use(express.static(__dirname + '/stuff'));
 app.get('/', function(req, res){
@@ -24,6 +26,9 @@ var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingl
 var _FTKQueueCap = settings.queueCap ? settings.queueCap : 3;
 var _metapointsIntegrationKey = settings.metakey ? settings.metakey : 'asdf';
 
+//initializing utilities
+var util = new FTKUtil.FTKUtil();
+
 //loading players
 var currentUserData = require(_playersFile);
 var players = null;
@@ -35,12 +40,12 @@ if (currentUserData)
 		players[i].connected = false;
 		players[i].inqueue = false;
 		players[i].ingame = false;
-		console.log('checking loaded players: ' + players[i].name + ' ' + players[i].ip);
+		console.log('Checking loaded players: ' + util.getDisplay(players[i]) + ".");
 	}
 }
 else
 {
-	players = {};
+	players = [];
 }
 
 //regularly save current registered players
@@ -72,7 +77,7 @@ io.on('connection', function(socket){
 			playerSearchResult.connected = true;
 			playerSearchResult.ingame = false;
 			playerSearchResult.inqueue = false;
-			console.log(playerSearchResult.name + '(' + playerIP + ')' + ' has connected');
+			console.log(util.getDisplay(playerSearchResult) + ' has connected');
 			socket.emit('set-name', playerSearchResult.name);
 			socket.emit('log-message', 'Welcome back, ' + playerSearchResult.name + '.');
 			socket.emit('log-message', 'Currently, ' + getOnlinePlayersCount() + ' player(s) are online');
@@ -88,7 +93,7 @@ io.on('connection', function(socket){
 			{
 				if (playerGameMap[playerIP])
 				{
-					console.log('Attempting to recover ' + playerSearchResult.name + '(' + playerIP + ').');
+					console.log('Attempting to recover ' + util.getDisplay(playerSearchResult) + '.');
 					socket.emit('log-message', 'Attempting to recover your last game session.');
 					playerGameMap[playerIP].recoverSession(playerIP, socket);
 					playerGameMap[playerIP].alertMessageToAll(playerSearchResult.name + ' has returned!', 'normal');
@@ -108,13 +113,14 @@ io.on('connection', function(socket){
 		socket.emit('first-visit');
 	}
 	
+	//TODO: parse message to talk globally or to lobby
 	socket.on('chat-message', function (msg) {
 		io.emit('chat-message', playerSearchResult.name + ": " + msg);
 	});
 	
 	socket.on('ftk-move', function (command, data, callback) {
 		console.log('-------------------------------------------------------------------------------');
-		console.log('Five Ten King command initiated from ' + playerSearchResult.name + '(' + playerIP + ').');
+		console.log('Five Ten King command initiated from ' + util.getDisplay(playerSearchResult) + '.');
 		if (!playerGameMap[playerIP])
 		{
 			socket.emit('error-message', 'Your game instance has expired or has become unavailable. Please refresh your page to look for a new game');
@@ -146,7 +152,7 @@ io.on('connection', function(socket){
 					}
 				}
 				playerSearchResult.inqueue = false;
-				console.log(playerSearchResult.name + '(' + playerIP + ') has stopped queuing');
+				console.log(util.getDisplay(playerSearchResult) + ' has stopped queuing.');
 				socket.emit('log-message', 'Stopped searching for opponents.');
 				return;
 			}
@@ -159,7 +165,7 @@ io.on('connection', function(socket){
 					gameInstanceInProgress.alertMessageToAll(playerSearchResult.name + ' has quit. Please click the \'Quit\' button to search for a new game.', 'warning');
 					gameInstanceInProgress.endGame(playerIP);
 					delete playerGameMap[playerIP];
-					console.log(playerSearchResult.name + '(' + playerIP + ') has quit their game.');
+					console.log(util.getDisplay(playerSearchResult) + ' has quit their game.');
 					return;
 				}
 				else
@@ -171,7 +177,7 @@ io.on('connection', function(socket){
 		}
 	});
 	socket.on('player-is-ready', function () {
-		console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") requests to play a new game.");
+		console.log(util.getDisplay(playerSearchResult) + " requests to play a new game.");
 		if (!playerSearchResult.name)
 		{
 			console.log("Player name is screwed up");
@@ -186,13 +192,13 @@ io.on('connection', function(socket){
 		}
 		if (playerSearchResult.inqueue)
 		{
-			console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") is already in queue.");
+			console.log(util.getDisplay(playerSearchResult) + " is already in queue.");
 			socket.emit('error-message', 'Already in queue, please wait.');
 			return;
 		}
 		else if (playerSearchResult.ingame)
 		{
-			console.log(playerSearchResult.name + "(" + playerSearchResult.ip + ") is already in game.");
+			console.log(util.getDisplay(playerSearchResult) + " is already in game.");
 			socket.emit('error-message', 'Already in game, please wait until after your game is finished.');
 			return;
 		}
@@ -203,13 +209,16 @@ io.on('connection', function(socket){
 		if (playerQueue.length >= _FTKQueueCap)
 		{
 			var playerList = [];
+			var socketList = [];
 			for (var i = 0; i < playerQueue.length; i ++) //message player for game found; assemble players for new game instance
 			{
 				//playerQueue[i].socket.emit('success-message', 'Match found!');
+				socketList.push({ip: playerQueue[i].player.ip, socket: playerQueue[i].socket});
 				playerList.push(playerQueue[i]);
 			}
 			var extraData = {httpRequestMaker: request, metakey: _metapointsIntegrationKey};
-			var newGameInstance = new ftk.FiveTenKing(playerList, _numDecksForFTK, extraData);
+			var messenger = new FTKMessenger.FTKMessenger(io, socketList);
+			var newGameInstance = new ftk.FiveTenKing(playerList, _numDecksForFTK, messenger, extraData);
 			var playersInGame = [];
 			for (var i = 0; i < playerList.length; i ++) //need to keep track of the games that the players are in
 			{
@@ -225,7 +234,7 @@ io.on('connection', function(socket){
 		playerSearchResult.connected = false;
 		playerSearchResult.ingame = false;
 		playerSearchResult.inqueue = false;
-		console.log('the player ' + playerSearchResult.name + '(' + playerIP + ') has disconnected');
+		console.log(util.getDisplay(playerSearchResult) + ' has disconnected');
 		for (var i = 0; i < playerQueue.length; i ++)
 		{
 			if (playerQueue[i].player.ip === playerIP)

@@ -162,7 +162,6 @@ io.on('connection', function(socket){
 				playerSearchResult.ingame = false;
 				if (gameInstanceInProgress)
 				{
-					gameInstanceInProgress.alertMessageToAll(playerSearchResult.name + ' has quit. Please click the \'Quit\' button to search for a new game.', 'warning');
 					gameInstanceInProgress.endGame(playerIP);
 					delete playerGameMap[playerIP];
 					console.log(util.getDisplay(playerSearchResult) + ' has quit their game.');

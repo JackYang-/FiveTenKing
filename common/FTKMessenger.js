@@ -30,7 +30,7 @@ var FTKMessenger = function(io, players)
 	}
 	
 	//Summary: send a command to the specified ip
-	this.SendToIP = function (ip, command, parameter)
+	this.sendToIP = function (ip, command, parameter)
 	{
 		if (!command || !ip)
 		{
@@ -38,7 +38,7 @@ var FTKMessenger = function(io, players)
 		}
 		if (!parameter)
 		{
-			socketAtIP[ip].emit(command, parameter);
+			socketAtIP[ip].emit(command);
 		}
 		else
 		{
@@ -47,7 +47,7 @@ var FTKMessenger = function(io, players)
 	}
 	
 	//Summary: sends a command with one parameter to all of the sockets
-	this.SendToAll = function (command, parameter)
+	this.sendToAll = function (command, parameter)
 	{
 		if (!command)
 		{
@@ -67,13 +67,13 @@ var FTKMessenger = function(io, players)
 	
 	//**************Functions below are wrappers for SendToIP and SendToAll
 	//Summary: find the socket with the given ip and send a desktop notification with the given message
-	this.SendNotificationToIP = function (ip, message)
+	this.sendNotificationToIP = function (ip, message)
 	{
 		//socketAtIP[ip].emit('desktop-notification', message);
-		this.SendToIP(ip, 'desktop-notification', message);
+		this.sendToIP(ip, 'desktop-notification', message);
 	}
 	
-	this.SendMessageToAll = function(message, type)
+	this.sendMessageToAll = function(message, type)
 	{
 		var msgType = "";
 		if (!message)
@@ -100,7 +100,7 @@ var FTKMessenger = function(io, players)
 				return;		
 		}
 		//io.to(id).emit(msgType, message);
-		this.SendToAll(msgType, message);
+		this.sendToAll(msgType, message);
 	}
 }
 

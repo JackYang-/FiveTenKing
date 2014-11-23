@@ -1,28 +1,30 @@
 (function () {
 var FiveTenKing = function (playersList, deckCount, newMessenger, extraData) 
 {
-	//initializing components and utilities
-	var FTKUtil = require("./common/FTKUtil.js");
-	var util = new FTKUtil.FTKUtil();
-	var FTKDealer = require("./components/FTKDealer.js");
-	var FTKPlayChecker = require("./components/FTKPlayChecker.js");
-	
-	//privatize this one
-	var playChecker = new FTKPlayChecker.FTKPlayChecker();  //
 	if (playersList.length <= 0 || deckCount <= 0)
 	{
 		console.log("Error: initializing 50k with 0 or fewer players or decks" + playersList.length + " " + deckCount);
 		return;
 	}
-	var playerAtIP = {};
-	var playerAfterIP = {};
-	var playersInRoom = "";
+
+	//initializing components and utilities
+	var FTKUtil = require("./common/FTKUtil.js");
+	var FTKDealer = require("./components/FTKDealer.js");
+	var FTKPlayChecker = require("./components/FTKPlayChecker.js");
+	var util = new FTKUtil.FTKUtil();
+	var dealer = new FTKDealer.FTKDealer(deckCount);
+	var playChecker = new FTKPlayChecker.FTKPlayChecker();
+	
+	//initializing game logic variables
+	var playerAtIP = {}; //hashtable for finding players based on their ip
+	var playerAfterIP = {}; //hashtable for finding players that play after another player's ip
+	var playersInRoom = []; //an array of the names of the players in the room
 	for (var i = 0; i < playersList.length; i ++)
 	{
 		playersList[i].player.inqueue = false;
 		playersList[i].player.ingame = true;
 		playersList[i].hand = [];
-		playersInRoom += playersList[i].player.name + ", ";
+		playersInRoom.push(playersList[i].player.name);
 		
 		var currentIP = playersList[i].player.ip;
 		playerAtIP[currentIP] = playersList[i];
@@ -35,43 +37,52 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 			playerAfterIP[currentIP] = playersList[0];
 		}
 	}
-	var messenger = newMessenger;
-	var httpRequest = extraData.httpRequestMaker; //
-	var metakey = extraData.metakey; //
-	var hasFirstWinner = false; //
+	var messenger = newMessenger; //the messenger is used to communicate with the players in the room via socketio
 	var players = playersList; //[{player: player, socket: socket, hand: [{card: 'd3', suit='d', value=0}]}]
-	var lastPlay = playChecker.getNoPlay();
-	var lastPlayMaker = "";
-	var latestPlayCards = [];
-	var gameOver = false;
+	var lastPlay = playChecker.getNoPlay(); //this stores the calculated result of the last play; for more details check out FTKPlayChecker.js
+	var lastPlayMaker = ""; //ip of the player who last played
+	var latestPlayCards = []; //the list of cards in the last play
+	var gameOver = false; //gameOver prevents the lobby from communicating with players after the game is done; it is set when everyone finished playing or someone quits prematurely
+	var gamePaused = false; //the game pauses when a player disconnects
+	var turnSkipper = "";
 	
-	var dealer = new FTKDealer.FTKDealer(deckCount);
+	//metapoints integration https://github.com/msrose/metapoints
+	var hasFirstWinner = false; //first winner of the game wins 500 metapoints
+	var httpRequest = extraData.httpRequestMaker;
+	var metakey = extraData.metakey;
+
+	
 	var firstTurnOwner = dealer.dealCards(players);
 	if (!firstTurnOwner)
 	{
 		console.log("ERROR: first turn owner not initialized.");
 		return;
 	}
-	turnOwnerIP = firstTurnOwner;
+	var turnOwnerIP = firstTurnOwner;
+	startCountdown(30000);
 	
-	//********************************************************************************************************************
+		
+	//Summary: called when a player quits to end the game.
 	this.endGame = function (ip) 
 	{
-		console.log("The player " + util.getDisplay(playerAtIP[ip]) + " has quit the game. If the game is already over, then nothing else will happen. Otherwise, this game is now over.");
+		console.log("The player " + util.getDisplay(playerAtIP[ip].player) + " has quit the game. If the game is already over, then nothing else will happen. Otherwise, this game is now over.");
 		messenger.sendMessageToAll(playerAtIP[ip].player.name + " has quit the game. It is now safe to leave. Use the Quit button to exit this lobby and the Ready button to look for a new game.");
 		gameOver = true;
 	}
 	
-	this.alertMessageToAll = function (message, type)
-	{
-		messenger.sendMessageToAll(message, type);
-	}
-	
+	//Summary: attempts to re-add a player who has disconnected back into their game by updating their socket and refreshing their ui elements
 	this.recoverSession = function (ip, newSocket)
 	{
+		if (gameOver)
+		{
+			recoveringPlayer.socket.emit('log-message', "The game you were in is now over. Click ready to start a new game.");
+		}
 		var recoveringPlayer = playerAtIP[ip];
+		recoveringPlayer.player.inqueue = false;
+		recoveringPlayer.player.ingame = true;
 		recoveringPlayer.socket = newSocket;
-		console.log("Attempting to recover " + util.getDisplay(recoveringPlayer) + ".");
+		messenger.Add(newSocket);
+		console.log("Attempting to recover " + util.getDisplay(recoveringPlayer.player) + ".");
 		var hand = playerAtIP[ip].hand;
 		recoveringPlayer.socket.emit('ftk-recover-game-session');
 		console.log('Hand length: ' + hand.length);
@@ -95,31 +106,75 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 			console.log('No plays on the field at the moment.');
 			recoveringPlayer.socket.emit('ftk-clear-display');
 		}
+		gamePaused = false;
+		startCountdown(30000);
+		messenger.sendMessageToAll(recoveringPlayer.player.name + " has returned.", "success");
 	}
 	
+	//Summary: informs the game instance that a player has disconnected. The game will be paused (no commands accepted) until the player returns.
+	this.alertDisconnect = function (ip)
+	{
+		var disconnectedPlayer = playerAtIP[ip];
+		if (!disconnectedPlayer)
+		{
+			console.log("Notified that a player has been disconnected but the player cannot be found.");
+			return;
+		}
+		messenger.sendMessageToAll(disconnectedPlayer.player.name + " has just disconnected. The game will now be paused. Please wait for their return. You may quit the game by clicking on the Quit button.", "warning");
+		if (turnOwnerIP)
+		{
+			messenger.sendToIP(turnOwnerIP, 'ftk-pause-countdown');
+		}
+		clearTimeout(turnSkipper);
+		gamePaused = true;
+	}
+	
+	//Summary: provide a central point of accepting and dealing with game action commands
 	this.handleCommand = function (ip, command, data)
 	{
-		console.log('Five Ten King received command');
+		//console.log('Five Ten King received command');
 		if (gameOver)
 		{
 			console.log('Not accepting commands anymore since game is over.');
 			return false;
 		}
+		if (gamePaused)
+		{
+			console.log("Not accepting commands since game is paused.");
+			messenger.sendToIP(ip, 'error-message', "The game is currently paused.");
+			return false;
+		}
 		switch (command)
 		{
 			case 'ftkcmd-make-play':
-				console.log('ftkcmd-make-play has been called');
+				console.log('A play is to be made.');
 				return handlePlay(ip, data);
 				break;
 			case 'ftkcmd-pass-turn':
-				console.log('ftkcmd-pass-turn has been called');
+				console.log('The player requests to pass.');
 				return goNextTurn(ip);
 				break;
 			default:
 				return false;
 		}
 	}
-	//********************************************************************************************************************
+	
+	function startCountdown (numSeconds)
+	{
+		if (!numSeconds)
+		{
+			numSeconds = 30000;
+		}
+		console.log("Countdown Started.");
+		messenger.sendToIP(turnOwnerIP, 'ftk-start-countdown', numSeconds);
+		turnSkipper = setTimeout(function () {
+			messenger.sendToIP(turnOwnerIP, 'error-message', "You have been idle for too long. Your turn will be skipped.");
+			goNextTurn(turnOwnerIP, "force-pass");
+		}, numSeconds);
+	}
+	
+	//Private functions
+	//Summary: checks if the player at some ip actually has the cards that they try to play
 	function hasCards (ip, cardsToPlay)
 	{
 		var playerHand = playerAtIP[ip].hand;
@@ -143,7 +198,7 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		return true;
 	}
 	
-	//********************************************************************************************************************
+	//Summary: remove a list of cards from a player's hand after they have made a play with it
 	function removeCards (ip, cardsToRemove)
 	{
 		var playerHand = playerAtIP[ip].hand;
@@ -170,14 +225,16 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		return numCardsRemoved;
 	}
 	
-	//********************************************************************************************************************
+	//Summary: handles the logic for handling end of turns
+	//Notes: goNextTurn is called after a play was made, when a player passes, or when a player has been idle for too long on their turn
 	function goNextTurn (ip, type)
 	{
 		if (!type)
 		{
 			type = 'passing';
 		}
-		console.log("goNextTurn called by " + util.getDisplay(playerAtIP[ip]) + "; type: " + type);
+		console.log("goNextTurn called by " + util.getDisplay(playerAtIP[ip].player) + "; type: " + type);
+		clearTimeout(turnSkipper);
 		
 		if (!(turnOwnerIP === ip))
 		{
@@ -188,6 +245,10 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		{
 			messenger.sendToIP(ip, 'error-message', 'Cannot pass on your own turn if there is no play to pass on.');
 			return false;
+		}
+		if (type === 'force-pass')
+		{
+			type = 'passing';
 		}
 		
 		var allCardsPlayed = true;
@@ -219,23 +280,23 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 			{
 				console.log("everyone passed on " + lastPlayMaker + "'s play, so now it's his turn again");
 				lastPlayMaker = "";
-				lastPlay = playChecker.getNoPlay();//{type: this.playChecker.playTypes.NoPlay, strength: 0, length: 0};
+				lastPlay = playChecker.getNoPlay();
 				messenger.sendToAll('ftk-clear-display');
 			}
 			
 			while (playerAtIP[newTurnOwnerIP].hand.length === 0) //if the new turn is for a player who has won, then their turn is skipped
 			{
-				console.log(util.getDisplay(playerAtIP[newTurnOwnerIP]) + " has already finished playing their hand. So their turn will be skipped");
+				console.log(util.getDisplay(playerAtIP[newTurnOwnerIP].player) + " has already finished playing their hand. So their turn will be skipped");
 				newTurnOwnerIP = playerAfterIP[newTurnOwnerIP].player.ip;
 				if (newTurnOwnerIP === lastPlayMaker) //wipe cards in play if new turn owner is playing on top of his last play
 				{
 					console.log("everyone passed on " + lastPlayMaker + "'s play, so now it's his turn again");
 					lastPlayMaker = "";
-					lastPlay = playChecker.getNoPlay();//{type: playChecker.playTypes.NoPlay, strength: 0, length: 0};
+					lastPlay = playChecker.getNoPlay();
 					messenger.sendToAll('ftk-clear-display');
 				}
 				numTimesSkipped ++;
-				if (numTimesSkipped > players.length)
+				if (numTimesSkipped > players.length) //this is to prevent infinite loops and to catch bugs related to the fact that playerAfterIP was not initialized correctly
 				{
 					console.log('THIS IS PROBABLY A BUG: all players have finished playing the but the game isnt yet over.');
 					break;
@@ -245,18 +306,18 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 			{
 				console.log("warning: the player after the current player is the current player himself; not a bug if only 1 player is in game");
 				lastPlayMaker = "";
-				lastPlay = playChecker.getNoPlay();//{type: playChecker.playTypes.NoPlay, strength: 0, length: 0};
+				lastPlay = playChecker.getNoPlay();
 				messenger.sendToAll('ftk-clear-display');
 			}
 			turnOwnerIP = newTurnOwnerIP;
-			if (type === 'passing')
+			if (type === "passing")
 			{
 				messenger.sendMessageToAll(playerAtIP[ip].player.name + " has passed.", "normal");
 			}
 			
 			messenger.sendMessageToAll("Now it's " + playerAtIP[newTurnOwnerIP].player.name + "'s turn.", "normal");
 			messenger.sendNotificationToIP(newTurnOwnerIP, "Hey, it's your turn!");
-			
+			startCountdown(30000);
 			return true;
 		}
 		else 
@@ -265,7 +326,7 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		}
 	}
 	
-	//********************************************************************************************************************
+	//Summary: updates the players on the set of cards that were last played
 	function alertPlay (cardsToPlay)
 	{
 		if (gameOver)
@@ -277,8 +338,8 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		messenger.sendToAll('ftk-latest-play', cardsToPlay);
 	}
 	
-	//********************************************************************************************************************
-	function updateOthersToAll ()
+	//Summary: updates the players on the number of cards that other players have
+	function updateOthersToAll()
 	{
 		if (gameOver)
 		{
@@ -301,23 +362,23 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		}
 	}
 
-	//********************************************************************************************************************
+	//Summary: handles logic for when a player makes a move
 	function handlePlay (ip, cardsToPlay)
 	{
 		if (!(turnOwnerIP === ip))
 		{
-			console.log(util.getDisplay(playerAtIP[ip]) + " requested to play when it's not their turn. " + util.getDisplay(playerAtIP[turnOwnerIP]) + " has the turn.");
+			console.log(util.getDisplay(playerAtIP[ip].player) + " requested to play when it's not their turn. " + util.getDisplay(playerAtIP[turnOwnerIP].player) + " has the turn.");
 			messenger.sendToIP(ip, "error-message", "It is not currently your turn to play.");
 			return false;
 		}
-		console.log('Incoming request is coming from the turn owner.');
+		//console.log('Incoming request is coming from the turn owner.');
 		if (!(hasCards(ip, cardsToPlay)))
 		{
 			console.log('Turn owner\'s proposed play did not match with hand');
 			messenger.sendToIP(ip, "error-message", "You are trying to make a play with cards you don't have!");
 			return false;
 		}
-		console.log('Turn owner\'s proposed play matched with hand.');
+		//console.log('Turn owner\'s proposed play matched with hand.');
 
 		var playResult = playChecker.calculatePlay(cardsToPlay);
 		if (!(playChecker.isValidPlay(playResult)))
@@ -340,7 +401,7 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 			messenger.sendToIP(ip, "error-message", "An error occurred while processing your play.");
 			return false;
 		}
-		console.log(util.getDisplay(playerAtIP[ip]) + " just finished making the play.");
+		console.log(util.getDisplay(playerAtIP[ip].player) + " just finished making the play.");
 		messenger.sendMessageToAll(playerAtIP[ip].player.name + " just made a play. They now have " + playerAtIP[ip].hand.length + " cards left in their hand.", "warning");
 		updateOthersToAll();
 		if (playerAtIP[ip].hand.length <= 0)
@@ -349,10 +410,11 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 			messenger.sendMessageToAll(playerAtIP[ip].player.name + " has won! Congratulations.", "success");
 			if (!hasFirstWinner)
 			{
-				console.log("This is the first winner of this match. Preparing to send metapoints if integration exists.");
+				console.log("This is the first winner of this match.");
 				hasFirstWinner = true;
 				if (metakey)
 				{
+					console.log("Preparing to send metapoints request.");
 					var url = 'http://10.4.3.180:1338/integrations';
 					var headers = {
 						'metakey': metakey

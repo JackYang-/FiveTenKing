@@ -117,7 +117,7 @@
 				<li>
 					<button id="clear-logs" class="navbar-right-buttons btn btn-default">Clear Messages</button>
 				</li>
-				<li class="dropdown">
+				<li class="dropdown btn-group">
 					<a href="#" class="dropdown-toggle" data-toggle="dropdown"><span id="player-dropdown">Dropdown</span><span class="caret"></span></a>
 					<ul class="dropdown-menu" role="menu">
 						<li><a href="#" data-toggle="modal" data-target="#myModal">Change Name</a></li>
@@ -129,6 +129,9 @@
 	
 	<div class="some-container container-fluid">
 		<div id="gameboard" class="fill col-md-8">
+			<div id="countdown">
+				<p id="turn-skip-timer">It is currently not your turn.</p>
+			</div>
 			<div id="button-area">
 				<button class="btn btn-default" id="ftk-play-hand">Play</button>
 				<button class="btn btn-default" id="ftk-pass">Pass</button>

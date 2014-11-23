@@ -67,7 +67,7 @@ var FTKDealer = function (deckCount)
 	//shuffle deck
 	shuffleDeck();
 	
-	//Summary: takes in an array of players and populate each element's hand field
+	//Summary: takes in an array of players and populate each element's hand field; then return the ip of the player who is going first
 	//Note: this function will alter each element in the list by initializing a hand field as an empty array even if it doesn't exist
 	//		it will also return the ip of the player who is going first
 	//		it will also emit to the sockets to notify dealt cards

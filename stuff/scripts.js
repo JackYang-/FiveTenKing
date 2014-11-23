@@ -1,6 +1,8 @@
 (function () {
 var socket = io();
 var cardsInHand = [];
+var turnSkipTimer;
+var yourTurn = false;
 $(document).ready(function () {
 
 	$('#button-area').hide();
@@ -59,6 +61,31 @@ $(document).ready(function () {
 	socket.on('ftk-update-others', function (playersAndCards) {
 		displayOtherPlayersCards(playersAndCards);
 	});
+	
+	socket.on('ftk-start-countdown', function (numSeconds) {
+		console.log("Your turn!");
+		var timer = numSeconds;
+		yourTurn = true;
+		if (turnSkipTimer)
+		{
+			console.log("A timer is already in place.");
+			clearInterval(turnSkipTimer);
+		}
+		$('#turn-skip-timer').html("Your turn! Seconds remaining: " + Math.floor(timer/1000));
+		turnSkipTimer = setInterval(function () {
+			if (timer > 0 && yourTurn)
+			{
+				timer -= 1000;
+				$('#turn-skip-timer').html("Your turn! Seconds remaining: " + Math.floor(timer/1000));
+			}
+			else
+			{
+				clearInterval(turnSkipTimer);
+				$('#turn-skip-timer').html("It's currently not your turn.");
+			}
+		}, 1000);
+	});
+	
 	
 	socket.on('first-visit', function () {
 		$('#introduction-game-rules').modal('toggle');
@@ -192,7 +219,6 @@ function sendNotification (msg)
 function passTurn()
 {
 	socket.emit('ftk-move', 'ftkcmd-pass-turn', 'pass-turn', function (approved) {
-	
 	});
 }
 
@@ -210,7 +236,7 @@ function playSelectedCards()
 	
 	if (cardsToPlay.length <= 0)
 	{
-		logMessage('Can\'t make a move without playing a card. Click \'Pass\' to pass your turn.');
+		logMessage("Can't make a move without playing a card. Click 'Pass' to pass your turn.", "error");
 		return;
 	}
 	

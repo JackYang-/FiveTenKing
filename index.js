@@ -24,7 +24,7 @@ var _listenIP = settings.ip ? settings.ip : 'asdf';
 var _playersFile = settings.playersFilePath ? settings.playersFilePath : './registeredPlayers.json';
 var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 2;
 var _FTKQueueCap = settings.queueCap ? settings.queueCap : 3;
-var _metapointsIntegrationKey = settings.metakey ? settings.metakey : 'asdf';
+var _metapointsIntegrationKey = settings.metakey ? settings.metakey : '';
 
 //initializing utilities
 var util = new FTKUtil.FTKUtil();
@@ -96,9 +96,6 @@ io.on('connection', function(socket){
 					console.log('Attempting to recover ' + util.getDisplay(playerSearchResult) + '.');
 					socket.emit('log-message', 'Attempting to recover your last game session.');
 					playerGameMap[playerIP].recoverSession(playerIP, socket);
-					playerGameMap[playerIP].alertMessageToAll(playerSearchResult.name + ' has returned!', 'normal');
-					playerGameMap[playerIP].updateOthersToAll();
-					playerSearchResult.ingame = true;
 				}
 			}
 		}
@@ -118,9 +115,15 @@ io.on('connection', function(socket){
 		io.emit('chat-message', playerSearchResult.name + ": " + msg);
 	});
 	
+	//Summary: handles five ten king game commands
 	socket.on('ftk-move', function (command, data, callback) {
 		console.log('-------------------------------------------------------------------------------');
 		console.log('Five Ten King command initiated from ' + util.getDisplay(playerSearchResult) + '.');
+		if (!playerSearchResult.ingame)
+		{
+			socket.emit('error-message', 'You are not currently in a game.');
+			return false;
+		}
 		if (!playerGameMap[playerIP])
 		{
 			socket.emit('error-message', 'Your game instance has expired or has become unavailable. Please refresh your page to look for a new game');
@@ -134,6 +137,8 @@ io.on('connection', function(socket){
 		callback(result);
 		console.log('-------------------------------------------------------------------------------');
 	});
+	
+	//Summary: quit game
 	socket.on('player-quit-game', function () {
 		if (!(playerSearchResult.ingame || playerSearchResult.inqueue))
 		{
@@ -149,6 +154,7 @@ io.on('connection', function(socket){
 					if (playerQueue[i].player.ip === playerIP)
 					{
 						playerQueue.splice(i, 1);
+						break;
 					}
 				}
 				playerSearchResult.inqueue = false;
@@ -218,13 +224,10 @@ io.on('connection', function(socket){
 			var extraData = {httpRequestMaker: request, metakey: _metapointsIntegrationKey};
 			var messenger = new FTKMessenger.FTKMessenger(io, socketList);
 			var newGameInstance = new ftk.FiveTenKing(playerList, _numDecksForFTK, messenger, extraData);
-			var playersInGame = [];
 			for (var i = 0; i < playerList.length; i ++) //need to keep track of the games that the players are in
 			{
-				playersInGame.push(playerList[i].player.name);
 				playerGameMap[playerList[i].player.ip] = newGameInstance;
 			}
-			newGameInstance.alertMessageToAll('Match found! The players in the room are: ' + playersInGame.join() + '.');
 			playerQueue = [];
 		}
 	});
@@ -243,7 +246,7 @@ io.on('connection', function(socket){
 		}
 		if (playerGameMap[playerIP])
 		{
-			playerGameMap[playerIP].alertMessageToAll(playerSearchResult.name + " has just disconnected. Please wait for their return.", 'warning');
+			playerGameMap[playerIP].alertDisconnect(playerIP);
 		}
 	});
 	socket.on('set-new-name', function(newName) {
@@ -327,26 +330,6 @@ function playerAttributeExists(attribute, value)
 	}
 	return false;
 }
-
-/*function setPlayerAttributes (ip, attribute, value)
-{
-	for (var i in players)
-	{
-		if (players[i].ip === ip)
-		{
-			if (attribute === "name" && !(value ==="NewPlayer"))
-			{
-				players[i].name = value;
-			}
-			else if (attribute === "connected")
-			{
-				players[i].connected = value;
-			}
-			return true;
-		}
-	}
-	return false;
-}*/
 
 function getOnlinePlayersCount()
 {

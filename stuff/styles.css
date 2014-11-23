@@ -57,6 +57,12 @@ html, body {
 		position:relative;
 		margin-top: 10px;
 	}
+	#countdown
+	{
+		position:relative;
+		margin-top: 10px;
+		float: right;
+	}
 	#field-display
 	{
 		position:relative;

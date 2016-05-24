@@ -62,6 +62,11 @@ $(document).ready(function () {
 		displayOtherPlayersCards(playersAndCards);
 	});
 	
+	socket.on('ftk-end-countdown', function () {
+		clearInterval(turnSkipTimer);
+		$('#turn-skip-timer').html("It's currently not your turn.");
+	});
+	
 	socket.on('ftk-start-countdown', function (numSeconds) {
 		console.log("Your turn!");
 		var timer = numSeconds;
@@ -119,6 +124,9 @@ $(document).ready(function () {
 		$('#cardholder').empty();
 		$('#field-display').empty();
 		$('#other-players').empty();
+		clearInterval(turnSkipTimer);
+		$('#turn-skip-timer').empty();
+		$('#button-area').hide();
 	});
 	
 	$('#clear-logs').click(function () {

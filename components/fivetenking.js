@@ -8,16 +8,16 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 	}
 
 	//initializing components and utilities
-	var FTKUtil = require("./common/FTKUtil.js");
-	var FTKDealer = require("./components/FTKDealer.js");
-	var FTKPlayChecker = require("./components/FTKPlayChecker.js");
+	var FTKUtil = require("../common/FTKUtil.js");
+	var FTKDealer = require("./FTKDealer.js");
+	var FTKPlayChecker = require("./FTKPlayChecker.js");
 	var util = new FTKUtil.FTKUtil();
 	var dealer = new FTKDealer.FTKDealer(deckCount);
 	var playChecker = new FTKPlayChecker.FTKPlayChecker();
 	
 	//initializing game logic variables
-	var playerAtIP = {}; //hashtable for finding players based on their ip
-	var playerAfterIP = {}; //hashtable for finding players that play after another player's ip
+	var playerAtIP = {}; //map for finding players based on their ip
+	var playerAfterIP = {}; //map for finding players that play after another player's ip
 	var playersInRoom = []; //an array of the names of the players in the room
 	for (var i = 0; i < playersList.length; i ++)
 	{
@@ -73,15 +73,20 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 	//Summary: attempts to re-add a player who has disconnected back into their game by updating their socket and refreshing their ui elements
 	this.recoverSession = function (ip, newSocket)
 	{
-		if (gameOver)
-		{
-			recoveringPlayer.socket.emit('log-message', "The game you were in is now over. Click ready to start a new game.");
-		}
 		var recoveringPlayer = playerAtIP[ip];
-		recoveringPlayer.player.inqueue = false;
-		recoveringPlayer.player.ingame = true;
+		if (!recoveringPlayer)
+		{
+			console.log("RecoverSession ERROR: the player attempting to recover cannot be found.");
+		}
 		recoveringPlayer.socket = newSocket;
 		messenger.Add(newSocket);
+		if (gameOver)
+		{
+			messenger.sendToIP(ip, 'error-message', "The game you were in is now over. Click ready to start a new game.");
+			return;
+		}
+		recoveringPlayer.player.inqueue = false;
+		recoveringPlayer.player.ingame = true;
 		console.log("Attempting to recover " + util.getDisplay(recoveringPlayer.player) + ".");
 		var hand = playerAtIP[ip].hand;
 		recoveringPlayer.socket.emit('ftk-recover-game-session');
@@ -89,22 +94,22 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		for (var i = 0; i < hand.length; i ++)
 		{
 			console.log('Dealing card: ' + hand[i].card);
-			recoveringPlayer.socket.emit('ftk-dealt-card', hand[i]);
+			messenger.sendToIP(ip, 'ftk-dealt-card', hand[i]);
 		}
-		recoveringPlayer.socket.emit('ftk-dealing-finished');
+		messenger.sendToIP(ip, 'ftk-dealing-finished');
 		
-		recoveringPlayer.socket.emit('log-message', 'It is currently ' + playerAtIP[turnOwnerIP].player.name + '\'s turn.');
+		messenger.sendToIP(ip, 'log-message', 'It is currently ' + playerAtIP[turnOwnerIP].player.name + '\'s turn.');
 		if (lastPlayMaker)
 		{
 			console.log('Last play maker: ' + lastPlayMaker);
 			var latestPlay = latestPlayCards;
-			recoveringPlayer.socket.emit('ftk-latest-play', latestPlay);
-			recoveringPlayer.socket.emit('log-message', 'The last play was made by ' + playerAtIP[lastPlayMaker].player.name + '.');
+			messenger.sendToIP(ip, 'ftk-latest-play', latestPlay);
+			messenger.sendToIP(ip, 'log-message', 'The last play was made by ' + playerAtIP[lastPlayMaker].player.name + '.');
 		}
 		else
 		{
 			console.log('No plays on the field at the moment.');
-			recoveringPlayer.socket.emit('ftk-clear-display');
+			messenger.sendToIP(ip, 'ftk-clear-display');
 		}
 		gamePaused = false;
 		startCountdown(30000);
@@ -123,7 +128,7 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		messenger.sendMessageToAll(disconnectedPlayer.player.name + " has just disconnected. The game will now be paused. Please wait for their return. You may quit the game by clicking on the Quit button.", "warning");
 		if (turnOwnerIP)
 		{
-			messenger.sendToIP(turnOwnerIP, 'ftk-pause-countdown');
+			messenger.sendToIP(turnOwnerIP, 'ftk-end-countdown');
 		}
 		clearTimeout(turnSkipper);
 		gamePaused = true;
@@ -168,8 +173,11 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		console.log("Countdown Started.");
 		messenger.sendToIP(turnOwnerIP, 'ftk-start-countdown', numSeconds);
 		turnSkipper = setTimeout(function () {
-			messenger.sendToIP(turnOwnerIP, 'error-message', "You have been idle for too long. Your turn will be skipped.");
-			goNextTurn(turnOwnerIP, "force-pass");
+			if (!gameOver)
+			{
+				messenger.sendToIP(turnOwnerIP, 'error-message', "You have been idle for too long. Your turn will be skipped.");
+				goNextTurn(turnOwnerIP, "force-pass");
+			}
 		}, numSeconds);
 	}
 	
@@ -275,6 +283,7 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 		console.log("next player ip: " + newTurnOwnerIP);
 		if (!gameOver)
 		{
+			messenger.sendToIP(turnOwnerIP, 'ftk-end-countdown'); 
 			var numTimesSkipped = 0;
 			if (newTurnOwnerIP === lastPlayMaker) //wipe cards in play if new turn owner is playing on top of his last play
 			{

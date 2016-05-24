@@ -3,7 +3,7 @@ var app = express();
 var fs = require('fs');
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-var ftk = require('./fivetenking.js');
+var ftk = require('./components/fivetenking.js');
 var request = require('request');
 var FTKUtil = require("./common/FTKUtil.js");
 var FTKMessenger = require("./common/FTKMessenger.js");
@@ -22,9 +22,13 @@ var settings = require("./settings.json");
 var _listenPort = settings.port ? settings.port : '3000';
 var _listenIP = settings.ip ? settings.ip : 'asdf';
 var _playersFile = settings.playersFilePath ? settings.playersFilePath : './registeredPlayers.json';
+
+//TODO: remove the 2 settings below once lobbies is done
 var _numDecksForFTK = settings.numDecksInSingletonFTK ? settings.numDecksInSingletonFTK : 2;
 var _FTKQueueCap = settings.queueCap ? settings.queueCap : 3;
+
 var _metapointsIntegrationKey = settings.metakey ? settings.metakey : '';
+var _lobbies = settings.lobbies ? settings.lobbies : [];
 
 //initializing utilities
 var util = new FTKUtil.FTKUtil();
@@ -46,6 +50,23 @@ if (currentUserData)
 else
 {
 	players = [];
+}
+
+//loading lobbies
+var lobbyMap = {};
+if (_lobbies.length > 0)
+{
+	for (var i = 0; i < _lobbies.length; i ++)
+	{
+		var cap = _lobbies[i].queueCap;
+		var decks = _lobbies[i].numDecks;
+		console.log("Loading lobbies: queue cap: " + cap + " | num decks: " + decks);
+		lobbyMap["Q" + cap + "D" + decks] = {queueCap: cap, numDecks: decks, players: []};
+	}
+}
+else
+{
+	console.log("No lobbies were configured. Creating some new lobbies");
 }
 
 //regularly save current registered players

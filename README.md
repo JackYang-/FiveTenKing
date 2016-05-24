@@ -13,6 +13,8 @@ numDecksInSingletonFTK: number of decks to be played, usually 1 is good for 1-4 
 
 queueCap: number of players entering the queue before a game is formed
 
+After you have the desired settings, run "node index.js" in your project directory and navigate to ip:port in your browser.
+
 # How to Play
 The first time you enter the game a manual pops up to explain the rules to you. You can reopen the manual by pressing the "Manual" button in the top left corner
 
@@ -33,3 +35,4 @@ This was made when I had much less experience! So many improvements could be mad
 - not force users to give themselves names and generate random ids for them instead
 - write less complex stuff in general
 - better configuration systems
+- and more

@@ -16,8 +16,8 @@ var FiveTenKing = function (playersList, deckCount, newMessenger, extraData)
 	var playChecker = new FTKPlayChecker.FTKPlayChecker();
 	
 	//initializing game logic variables
-	var playerAtIP = {}; //hashtable for finding players based on their ip
-	var playerAfterIP = {}; //hashtable for finding players that play after another player's ip
+	var playerAtIP = {}; //map for finding players based on their ip
+	var playerAfterIP = {}; //map for finding players that play after another player's ip
 	var playersInRoom = []; //an array of the names of the players in the room
 	for (var i = 0; i < playersList.length; i ++)
 	{

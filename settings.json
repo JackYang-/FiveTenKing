@@ -1,0 +1,7 @@
+{
+	"port":"3000",
+	"ip":"10.20.2.92",
+	"playersFilePath":"./registeredPlayers.json",
+	"numDecksInSingletonFTK":"1",
+	"queueCap":"1"
+}

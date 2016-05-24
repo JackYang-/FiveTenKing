@@ -2,10 +2,15 @@ Hi, this is a card game written in Node.
 
 # Setup
 You will need to install Node.js on your computer and npm install express, request and socket.io.
+
 The settings.json file includes configuration options. Important ones are:
+
 ip/port: location of where your game is hosted; usually you can put your IPv4 address for ip
+
 playersFilePath: a path to a file that saves the online players
+
 numDecksInSingletonFTK: number of decks to be played, usually 1 is good for 1-4 players but 2 is good when you have more
+
 queueCap: number of players entering the queue before a game is formed
 
 # How to Play

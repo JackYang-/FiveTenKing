@@ -25,7 +25,7 @@ Press "Pass" to pass turn, or wait until your turn timer runs out.
 Press "Quit" to leave the game prematurely.
 
 # Improvements
-This was made when I had much less experience! So many improvements could be made:
+Future to-dos:
 - write a better README...
 - write the code better (goes without saying)!
 - not force users to give themselves names and generate random ids for them instead
